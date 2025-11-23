@@ -2,15 +2,14 @@
 
 namespace Modules\Support\Controllers;
 
-use App\Core\Controller;
 use App\Core\Database;
 use App\Core\View;
 
-class TicketController extends Controller {
+class TicketController {
 
     public function index() {
         $this->requireLogin();
-        $db = Database::getInstance();
+        $db = Database::connect();
         $stmt = $db->prepare("SELECT * FROM tickets WHERE user_id = ? ORDER BY updated_at DESC");
         $stmt->execute([$_SESSION['user']['id']]);
         $tickets = $stmt->fetchAll();
@@ -27,7 +26,7 @@ class TicketController extends Controller {
             $priority = $_POST['priority'] ?? 'medium';
 
             if (!empty($subject) && !empty($message)) {
-                $db = Database::getInstance();
+                $db = Database::connect();
 
                 // Create Ticket
                 $stmt = $db->prepare("INSERT INTO tickets (user_id, subject, priority) VALUES (?, ?, ?)");
@@ -48,7 +47,7 @@ class TicketController extends Controller {
 
     public function view($id) {
         $this->requireLogin();
-        $db = Database::getInstance();
+        $db = Database::connect();
 
         // Fetch Ticket
         $stmt = $db->prepare("SELECT * FROM tickets WHERE id = ? AND user_id = ?");
