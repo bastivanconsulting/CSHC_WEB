@@ -60,7 +60,7 @@ graph TD;
 
 1.  **Cloner le dépôt** :
     ```bash
-    git clone [https://github.com/votre-repo/cshc.git](https://github.com/bastivanconsulting/CSHC_WEB.git)
+    git clone https://github.com/bastivanconsulting/CSHC_WEB.git
     ```
 
 2.  **Configurer le serveur web** :
