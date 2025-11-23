@@ -81,17 +81,13 @@
                 </div>
                 <div class="col-lg-2 col-6">
                     <h6 class="footer-heading">Solutions</h6>
-                    <a href="#" class="footer-link">VPN Cloud HA</a>
-                    <a href="#" class="footer-link">VPLS Privé</a>
-                    <a href="#" class="footer-link">Anti-DDoS</a>
-                    <a href="#" class="footer-link">Colocation</a>
+                    <a href="/vpn-cloud" class="footer-link">VPN Cloud HA</a>
+                    <a href="/vpls" class="footer-link">VPLS Privé</a>
+                    <a href="/anti-ddos" class="footer-link">Anti-DDoS</a>
                 </div>
                 <div class="col-lg-2 col-6">
                     <h6 class="footer-heading">Compagnie</h6>
-                    <a href="#" class="footer-link">À propos</a>
-                    <a href="#" class="footer-link">Datacenters</a>
-                    <a href="#" class="footer-link">Carrières</a>
-                    <a href="#" class="footer-link">Partenaires</a>
+                    <a href="https://www.bastivan.consulting/a-propos/" target="_blank" class="footer-link">À propos</a>
                 </div>
                 <div class="col-lg-4">
                     <h6 class="footer-heading">Contact & Légal</h6>
