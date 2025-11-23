@@ -33,9 +33,15 @@ $router->add('admin/save-service', 'AdminController', 'saveService'); // Sauvega
 // Gestion Client
 $router->add('client/cancel', 'ClientController', 'requestCancellation'); // Demande résiliation
 
+require_once __DIR__ . '/../app/Core/Settings.php';
+
 // --- NOUVELLES ROUTES MODULES ---
 $router->add('admin/modules', 'AdminController', 'listModules');      // La page visuelle
 $router->add('admin/toggle-module', 'AdminController', 'toggleModule'); // L'action technique
+
+// --- ROUTES SETTINGS ---
+$router->add('admin/settings', 'AdminController', 'settings');
+$router->add('admin/settings/save', 'AdminController', 'saveSettings');
 
 // Dispatch
 $url = isset($_GET['url']) ? $_GET['url'] : 'home';

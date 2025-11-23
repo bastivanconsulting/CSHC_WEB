@@ -49,6 +49,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 details TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                setting_key VARCHAR(50) NOT NULL UNIQUE,
+                setting_value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            );
+            INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('site_url', 'https://dev.cshybridconnect.com/');
+            INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('site_name', 'CSHC');
         ";
         $pdo->exec($sql);
 
