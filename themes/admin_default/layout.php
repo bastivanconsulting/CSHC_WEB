@@ -41,7 +41,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark admin-navbar sticky-top">
         <div class="container-fluid px-4">
             <a class="navbar-brand fw-bold" href="/admin">
-                <i class="fas fa-shield-alt text-warning me-2"></i>CSHC <span class="text-muted small">Admin</span>
+                <i class="fas fa-shield-alt text-warning me-2"></i><?= Settings::get('site_name') ?> <span class="text-muted small">Admin</span>
             </a>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
@@ -56,6 +56,9 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/modules"><i class="fas fa-cubes me-1"></i> Modules</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/settings"><i class="fas fa-sliders-h me-1"></i> Paramètres</a>
                     </li>
                     <!-- [HOOK] Les modules peuvent ajouter des liens ici -->
                     <?= Hook::call('navbar_items') ?>
