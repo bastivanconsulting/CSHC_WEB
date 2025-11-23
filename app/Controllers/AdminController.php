@@ -239,4 +239,34 @@ class AdminController {
         }
         header('Location: /admin/modules'); exit;
     }
+
+    // --- PARAMÈTRES (SETTINGS) ---
+
+    public function settings() {
+        $this->checkAdmin();
+        // Force loading settings (which will create table if missing due to our lazy logic in Settings::get/load)
+        // But Settings::load is private. We can call Settings::getAll() or Settings::get('anything').
+        // Actually, we need to pass the current values to the view.
+
+        $settings = Settings::getAll();
+        // Ensure defaults if empty (though createTable handles it, but just in case)
+        if (empty($settings['site_url'])) $settings['site_url'] = 'https://dev.cshybridconnect.com/';
+        if (empty($settings['site_name'])) $settings['site_name'] = 'CSHC';
+
+        View::render('admin_settings', ['settings' => $settings], 'admin');
+    }
+
+    public function saveSettings() {
+        $this->checkAdmin();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $siteUrl = rtrim($_POST['site_url'], '/') . '/'; // Ensure trailing slash
+            $siteName = trim($_POST['site_name']);
+
+            Settings::set('site_url', $siteUrl);
+            Settings::set('site_name', $siteName);
+
+            // On pourrait ajouter un flash message ici
+        }
+        header('Location: /admin/settings'); exit;
+    }
 }
