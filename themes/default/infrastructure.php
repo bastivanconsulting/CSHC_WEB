@@ -5,7 +5,7 @@
         </span>
         <h1 class="display-3 fw-bold text-white mb-4">Une Infrastructure <span class="text-gradient">Globale</span></h1>
         <p class="lead text-muted mb-5 mx-auto" style="max-width: 700px;">
-            Déployez vos services sur notre backbone de 12 Tbps. Une redondance totale pour une disponibilité garantie à 99.99%.
+            Déployez vos services sur notre backbone de 150 Gbps. Une redondance totale pour une disponibilité garantie à 99.99%.
         </p>
     </div>
 
@@ -24,7 +24,7 @@
                     <div class="icon-box mb-3 text-primary display-4">
                         <i class="fas fa-tachometer-alt"></i>
                     </div>
-                    <h3 class="text-white fw-bold">12 Tbps+</h3>
+                    <h3 class="text-white fw-bold">150 Gbps</h3>
                     <p class="text-muted">Capacité Backbone</p>
                 </div>
             </div>
@@ -35,8 +35,8 @@
                     <div class="icon-box mb-3 text-primary display-4">
                         <i class="fas fa-server"></i>
                     </div>
-                    <h3 class="text-white fw-bold">32</h3>
-                    <p class="text-muted">Points de Présence (PoPs)</p>
+                    <h3 class="text-white fw-bold">5</h3>
+                    <p class="text-muted">Zones de Disponibilité (AZ)</p>
                 </div>
             </div>
         </div>
@@ -54,31 +54,31 @@
     </div>
 
     <!-- Network Details with Alpine.js interaction -->
-    <div class="row align-items-center mb-5" x-data="{ activeTab: 'eu' }">
+    <div class="row align-items-center mb-5" x-data="{ activeTab: 'fr' }">
         <div class="col-lg-5" data-aos="fade-right">
-            <h2 class="text-white fw-bold mb-4">Présence Internationale</h2>
-            <p class="text-muted mb-4">Nous opérons nos propres datacenters et points de présence sur 3 continents.</p>
+            <h2 class="text-white fw-bold mb-4">Nos Localisations</h2>
+            <p class="text-muted mb-4">Une présence stratégique au coeur de l'Europe.</p>
 
             <div class="d-flex flex-column gap-3">
-                <button @click="activeTab = 'eu'" :class="activeTab === 'eu' ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-secondary'" class="btn text-start p-3 border border-opacity-25 d-flex align-items-center transition-all">
+                <button @click="activeTab = 'fr'" :class="activeTab === 'fr' ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-secondary'" class="btn text-start p-3 border border-opacity-25 d-flex align-items-center transition-all">
                     <i class="fas fa-map-marker-alt me-3"></i>
                     <div>
-                        <strong class="d-block">Europe</strong>
-                        <small>Paris, Frankfurt, London, Amsterdam</small>
+                        <strong class="d-block">France</strong>
+                        <small>Roubaix, Paris, Graveline</small>
                     </div>
                 </button>
-                <button @click="activeTab = 'na'" :class="activeTab === 'na' ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-secondary'" class="btn text-start p-3 border border-opacity-25 d-flex align-items-center transition-all">
+                <button @click="activeTab = 'pl'" :class="activeTab === 'pl' ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-secondary'" class="btn text-start p-3 border border-opacity-25 d-flex align-items-center transition-all">
                     <i class="fas fa-map-marker-alt me-3"></i>
                     <div>
-                        <strong class="d-block">Amérique du Nord</strong>
-                        <small>Beauharnois, Vint Hill, Hillsboro</small>
+                        <strong class="d-block">Pologne</strong>
+                        <small>Varsovie</small>
                     </div>
                 </button>
-                <button @click="activeTab = 'apac'" :class="activeTab === 'apac' ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-secondary'" class="btn text-start p-3 border border-opacity-25 d-flex align-items-center transition-all">
+                <button @click="activeTab = 'de'" :class="activeTab === 'de' ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-secondary'" class="btn text-start p-3 border border-opacity-25 d-flex align-items-center transition-all">
                     <i class="fas fa-map-marker-alt me-3"></i>
                     <div>
-                        <strong class="d-block">Asie-Pacifique</strong>
-                        <small>Singapore, Sydney</small>
+                        <strong class="d-block">Allemagne</strong>
+                        <small>Limburg</small>
                     </div>
                 </button>
             </div>
@@ -86,36 +86,30 @@
         <div class="col-lg-7" data-aos="fade-left">
             <div class="card bg-dark border-secondary border-opacity-25 h-100 p-4 position-relative overflow-hidden">
                 <!-- Dynamic Content based on Alpine state -->
-                <div x-show="activeTab === 'eu'" x-transition:enter="animate__animated animate__fadeIn">
-                    <h4 class="text-white mb-3">Réseau Europe</h4>
-                    <p class="text-muted">Notre coeur de réseau européen est interconnecté via une boucle optique redondante de 400G.</p>
+                <div x-show="activeTab === 'fr'" x-transition:enter="animate__animated animate__fadeIn">
+                    <h4 class="text-white mb-3">France</h4>
+                    <p class="text-muted">Nos infrastructures historiques haute performance.</p>
                     <ul class="list-unstyled text-muted mt-3">
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Latence < 5ms entre capitales</li>
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Interconnexion directe avec +1500 opérateurs</li>
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Certification ISO 27001 (Datacenters uniquement)</li>
+                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Roubaix (1-AZ)</li>
+                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Paris (3-AZ)</li>
+                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Graveline (1-AZ)</li>
                     </ul>
-                    <img src="https://via.placeholder.com/600x300/0f172a/2563eb?text=Map+Europe" alt="Europe Map" class="img-fluid rounded mt-3 opacity-75 border border-secondary border-opacity-25">
                 </div>
 
-                <div x-show="activeTab === 'na'" x-transition:enter="animate__animated animate__fadeIn" style="display: none;">
-                    <h4 class="text-white mb-3">Réseau Amérique du Nord</h4>
-                    <p class="text-muted">Une infrastructure massive pour absorber les plus grandes attaques DDoS du monde.</p>
+                <div x-show="activeTab === 'pl'" x-transition:enter="animate__animated animate__fadeIn" style="display: none;">
+                    <h4 class="text-white mb-3">Pologne</h4>
+                    <p class="text-muted">Point de présence stratégique pour l'Europe de l'Est.</p>
                     <ul class="list-unstyled text-muted mt-3">
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Capacité de mitigation de 15 Tbps</li>
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Conformité SOC 2 Type II</li>
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Double adduction électrique</li>
+                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Varsovie (1-AZ)</li>
                     </ul>
-                    <img src="https://via.placeholder.com/600x300/0f172a/2563eb?text=Map+North+America" alt="NA Map" class="img-fluid rounded mt-3 opacity-75 border border-secondary border-opacity-25">
                 </div>
 
-                <div x-show="activeTab === 'apac'" x-transition:enter="animate__animated animate__fadeIn" style="display: none;">
-                    <h4 class="text-white mb-3">Réseau Asie-Pacifique</h4>
-                    <p class="text-muted">Extension stratégique pour servir les marchés émergents avec une latence minimale.</p>
+                <div x-show="activeTab === 'de'" x-transition:enter="animate__animated animate__fadeIn" style="display: none;">
+                    <h4 class="text-white mb-3">Allemagne</h4>
+                    <p class="text-muted">Interconnexion directe avec les principaux exchanges européens.</p>
                     <ul class="list-unstyled text-muted mt-3">
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Routes optimisées vers la Chine</li>
-                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Support local 24/7</li>
+                        <li class="mb-2"><i class="fas fa-check text-primary me-2"></i>Limburg (1-AZ)</li>
                     </ul>
-                    <img src="https://via.placeholder.com/600x300/0f172a/2563eb?text=Map+Asia" alt="Asia Map" class="img-fluid rounded mt-3 opacity-75 border border-secondary border-opacity-25">
                 </div>
             </div>
         </div>
