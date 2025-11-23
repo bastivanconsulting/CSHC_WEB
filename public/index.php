@@ -13,6 +13,7 @@ $router = new Router();
 
 // Définition des routes
 $router->add('home', 'HomeController', 'index');
+$router->add('infrastructure', 'HomeController', 'infrastructure');
 $router->add('login', 'AuthController', 'login');
 $router->add('logout', 'AuthController', 'logout');
 $router->add('dashboard', 'AuthController', 'dashboard');
