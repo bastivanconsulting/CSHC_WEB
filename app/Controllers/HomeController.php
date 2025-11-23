@@ -14,4 +14,22 @@ class HomeController {
             'title' => Settings::get('site_name') . ' | Infrastructure'
         ], 'front');
     }
+
+    public function vpnCloud() {
+        View::render('vpn_cloud', [
+            'title' => Settings::get('site_name') . ' | VPN Cloud HA'
+        ], 'front');
+    }
+
+    public function vpls() {
+        View::render('vpls', [
+            'title' => Settings::get('site_name') . ' | VPLS Privé'
+        ], 'front');
+    }
+
+    public function antiDdos() {
+        View::render('anti_ddos', [
+            'title' => Settings::get('site_name') . ' | Protection Anti-DDoS'
+        ], 'front');
+    }
 }

@@ -14,6 +14,9 @@ $router = new Router();
 // Définition des routes
 $router->add('home', 'HomeController', 'index');
 $router->add('infrastructure', 'HomeController', 'infrastructure');
+$router->add('vpn-cloud', 'HomeController', 'vpnCloud');
+$router->add('vpls', 'HomeController', 'vpls');
+$router->add('anti-ddos', 'HomeController', 'antiDdos');
 $router->add('login', 'AuthController', 'login');
 $router->add('logout', 'AuthController', 'logout');
 $router->add('dashboard', 'AuthController', 'dashboard');
