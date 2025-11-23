@@ -19,6 +19,7 @@
         <div class="container">
             <a class="navbar-brand" href="<?= Settings::get('site_url') ?>">
                 <i class="fas fa-cube me-2 text-primary"></i><?= Settings::get('site_name') ?>
+                <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25 ms-2" style="font-size: 0.6em; vertical-align: middle;">CSHCv1</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -70,7 +71,6 @@
                     </p>
                     <div class="d-flex gap-2">
                         <span class="badge badge-tech">AS214939</span>
-                        <span class="badge badge-tech">ISO 27001</span>
                     </div>
                 </div>
                 <div class="col-lg-2 col-6">
@@ -88,14 +88,18 @@
                     <a href="#" class="footer-link">Partenaires</a>
                 </div>
                 <div class="col-lg-4">
-                    <h6 class="footer-heading">Support & Légal</h6>
-                    <div class="d-flex align-items-center mb-3 text-muted">
-                        <i class="fas fa-phone-alt me-3"></i>
-                        <span>+33 1 23 45 67 89</span>
+                    <h6 class="footer-heading">Contact & Légal</h6>
+                    <div class="d-flex align-items-center mb-2 text-muted small">
+                        <i class="fas fa-map-marker-alt me-3 text-primary"></i>
+                        <span>14 Bd du Dr Lamotte, 60000 Beauvais</span>
                     </div>
-                    <div class="d-flex align-items-center mb-4 text-muted">
-                        <i class="fas fa-envelope me-3"></i>
-                        <span>support@cshc.network</span>
+                    <div class="d-flex align-items-center mb-2 text-muted small">
+                        <i class="fas fa-phone-alt me-3 text-primary"></i>
+                        <span>+33 3 63 53 41 25</span>
+                    </div>
+                    <div class="d-flex align-items-center mb-4 text-muted small">
+                        <i class="fas fa-envelope me-3 text-primary"></i>
+                        <span>contact@bastivanconsulting.com</span>
                     </div>
                     <div class="d-flex gap-3">
                         <a href="#" class="text-secondary hover-white"><i class="fab fa-twitter fa-lg"></i></a>
@@ -106,11 +110,11 @@
             </div>
             <div class="row mt-5 pt-4 border-top border-white border-opacity-10">
                 <div class="col-md-6 text-center text-md-start">
-                    <p class="small text-muted mb-0">© <?= date('Y') ?> CSHC. Propulsé par <strong>Bastivan Consulting</strong>.</p>
+                    <p class="small text-muted mb-0">© <?= date('Y') ?> Bastivan Consulting. Tous droits réservés. Bastivan® est une marque déposée.</p>
                 </div>
                 <div class="col-md-6 text-center text-md-end">
+                    <a href="https://www.bastivan.consulting/mentions-legales/" target="_blank" class="text-muted small me-3 text-decoration-none">Mentions légales</a>
                     <a href="#" class="text-muted small me-3 text-decoration-none">CGV</a>
-                    <a href="#" class="text-muted small me-3 text-decoration-none">Politique de confidentialité</a>
                     <a href="#" class="text-muted small text-decoration-none">SLA</a>
                 </div>
             </div>
