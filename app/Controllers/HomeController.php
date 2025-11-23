@@ -8,4 +8,10 @@ class HomeController {
         // Cela va chercher themes/default/home.php et l'injecter dans themes/default/layout.php
         View::render('home', [], 'front');
     }
+
+    public function infrastructure() {
+        View::render('infrastructure', [
+            'title' => Settings::get('site_name') . ' | Infrastructure'
+        ], 'front');
+    }
 }
