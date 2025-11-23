@@ -5,7 +5,7 @@
         </span>
         <h1 class="display-3 fw-bold text-white mb-4">VPN Cloud <span class="text-gradient">Haute Disponibilité</span></h1>
         <p class="lead text-muted mb-5 mx-auto" style="max-width: 700px;">
-            Interconnectez vos sites distants avec une infrastructure VPN managée, chiffrée et redondée sur plusieurs datacenters.
+            Interconnectez vos sites distants avec une infrastructure VPN managée, chiffrée et redondée sur 3 zones de disponibilité (AZ) à Paris.
         </p>
     </div>
 
@@ -19,12 +19,12 @@
         <div class="col-lg-6" data-aos="fade-right">
             <h2 class="text-white fw-bold mb-4">Architecture Résiliente</h2>
             <p class="text-muted mb-4">
-                Ne laissez plus une panne internet isoler vos équipes. Notre solution VPN Cloud HA bascule automatiquement entre plusieurs passerelles pour garantir la continuité de vos opérations.
+                Ne laissez plus une panne internet isoler vos équipes. Notre solution VPN Cloud HA bascule automatiquement entre 3 zones de disponibilité parisiennes pour une résilience maximale.
             </p>
             <ul class="list-unstyled text-muted">
+                <li class="mb-3"><i class="fas fa-check-circle text-success me-2"></i>Infrastructure Multi-AZ (Paris AZ1, AZ2, AZ3)</li>
                 <li class="mb-3"><i class="fas fa-check-circle text-success me-2"></i>Failover automatique < 3 secondes</li>
                 <li class="mb-3"><i class="fas fa-check-circle text-success me-2"></i>Chiffrement AES-256 de bout en bout</li>
-                <li class="mb-3"><i class="fas fa-check-circle text-success me-2"></i>Compatible SD-WAN</li>
             </ul>
         </div>
         <div class="col-lg-6" data-aos="fade-left">
@@ -32,18 +32,28 @@
                 <div class="d-flex align-items-center mb-3">
                     <i class="fas fa-server fa-2x text-primary me-3"></i>
                     <div>
-                        <h5 class="text-white mb-0">Gateway Primaire</h5>
-                        <small class="text-success">En ligne - Paris DC1</small>
+                        <h5 class="text-white mb-0">Gateway 1 (Master)</h5>
+                        <small class="text-success">En ligne - Paris AZ1</small>
                     </div>
                 </div>
-                <div class="progress mb-4" style="height: 2px;">
+                <div class="progress mb-3" style="height: 2px;">
                     <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="fas fa-server fa-2x text-secondary me-3"></i>
+                    <div>
+                        <h5 class="text-muted mb-0">Gateway 2 (Standby)</h5>
+                        <small class="text-muted">Prêt - Paris AZ2</small>
+                    </div>
+                </div>
+                <div class="progress mb-3" style="height: 2px;">
+                    <div class="progress-bar bg-secondary" role="progressbar" style="width: 100%"></div>
                 </div>
                 <div class="d-flex align-items-center">
                     <i class="fas fa-server fa-2x text-secondary me-3"></i>
                     <div>
-                        <h5 class="text-muted mb-0">Gateway Secondaire</h5>
-                        <small class="text-muted">Standby - Frankfurt DC2</small>
+                        <h5 class="text-muted mb-0">Gateway 3 (Standby)</h5>
+                        <small class="text-muted">Prêt - Paris AZ3</small>
                     </div>
                 </div>
             </div>
