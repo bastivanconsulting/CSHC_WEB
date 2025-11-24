@@ -186,6 +186,16 @@ if (isset($_GET['firewall_js'])) {
             </style>
         </div>
         \`;
+        var html = '<div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.95);backdrop-filter:blur(10px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:\'Segoe UI\', sans-serif;">' +
+            '<div style="background:rgba(30, 41, 59, 0.6);border:1px solid rgba(255,255,255,0.1);padding:3rem;border-radius:1rem;text-align:center;max-width:400px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">' +
+                '<div style="margin-bottom:1.5rem;">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>' +
+                '</div>' +
+                '<h2 style="color:white;margin-bottom:1rem;font-size:1.5rem;">Security Check</h2>' +
+                '<p style="color:#94a3b8;margin-bottom:2rem;">Please verify you are human to access this site.</p>' +
+                '<button id="cshc-solve-btn" style="background:#2563eb;color:white;border:none;padding:0.75rem 2rem;border-radius:0.5rem;font-weight:bold;cursor:pointer;transition:all 0.2s;">Verify Now</button>' +
+            '</div>' +
+        '</div>';
 
         var div = document.createElement('div');
         div.innerHTML = html;
