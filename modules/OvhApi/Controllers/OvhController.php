@@ -131,6 +131,9 @@ class OvhController {
         // FIX: On doit décoder le bloc comme l'IP principale (remplacer _ par /)
         $parentBlock = isset($_GET['block']) ? urldecode(str_replace('_', '/', $_GET['block'])) : null;
 
+        $firewallError = null;
+        $ptrError = null;
+
         try {
             // 1. Info IP
             // Si on a un parentBlock, on peut être tenté de l'utiliser mais GET /ip/{ip} marche souvent.
@@ -169,6 +172,7 @@ class OvhController {
                 }
             } catch (\Exception $e) {
                 $firewall = null;
+                $firewallError = $e->getMessage();
             }
 
             // 4. Reverse DNS (PTR)
@@ -185,6 +189,7 @@ class OvhController {
                $ptr = $ptrData['reverse'] ?? '';
             } catch (\Exception $e) {
                $ptr = '';
+               $ptrError = $e->getMessage();
             }
 
         } catch (\Exception $e) {
@@ -198,6 +203,8 @@ class OvhController {
             'rules' => $rules,
             'ptr' => $ptr,
             'error' => $error,
+            'firewallError' => $firewallError,
+            'ptrError' => $ptrError,
             'parentBlock' => $parentBlock // Passer à la vue pour les formulaires
         ], 'admin');
     }
