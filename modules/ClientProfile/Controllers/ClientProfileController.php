@@ -7,22 +7,10 @@ use PDO;
 
 class ClientProfileController {
 
-    // No explicit routes for this module, it uses hooks.
-    // However, we can move the hook logic here if we want to be pure MVC,
-    // but hooks are event-driven.
-    // For now, I will keep the hooks in index.php but we could organize them better.
-    // Actually, the user asked for "Modules must have their templates and their controller independent of the system".
-    // This module generates HTML strings within hooks.
-    // It is better to use View::render inside the hook callbacks, pointing to a module view.
-
     public function renderAdminFormFields($args) {
         $u = $args['user'] ?? [];
-        // Use a view for this HTML chunk
-        // Note: View::render usually echoes output. Hook expects return string.
-        // We can capture output buffering.
-
         ob_start();
-        \View::render('modules/ClientProfile/Views/admin_form_fields', ['u' => $u], 'admin');
+        \View::render('admin_form_fields', ['u' => $u], 'admin');
         return ob_get_clean();
     }
 
@@ -69,7 +57,7 @@ class ClientProfileController {
         if (empty($u['lastname']) && empty($u['firstname'])) return;
 
         ob_start();
-        \View::render('modules/ClientProfile/Views/client_dashboard_widget', ['u' => $u], 'front');
+        \View::render('client_dashboard_widget', ['u' => $u], 'front');
         return ob_get_clean();
     }
 }

@@ -45,8 +45,7 @@ class AdminUsersController {
         // --- AFFICHAGE DE LA VUE ---
         $admins = $db->query("SELECT id, email, created_at FROM users WHERE role='admin' ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-        // Affiche la vue admin_users_management qui est maintenant dans le module
-        // Le chemin est relatif à la racine pour View::render avec le support 'modules/'
-        View::render('modules/AdminUsers/Views/admin_users_management', ['admins' => $admins, 'message' => $message], 'admin');
+        // Affiche la vue avec le nom court, grâce à l'auto-découverte dans View::render
+        View::render('admin_users_management', ['admins' => $admins, 'message' => $message], 'admin');
     }
 }

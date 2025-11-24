@@ -12,16 +12,28 @@ class View {
 
         $theme = self::getActiveTheme($context);
         $baseDir = __DIR__ . '/../../themes/' . $theme;
+        $viewFile = '';
 
-        // SUPPORT DES VUES DE MODULES
+        // 1. SUPPORT DES VUES AVEC CHEMIN EXPLICITE 'modules/...'
         if (strpos($viewName, 'modules/') === 0) {
-            // Si le nom commence par "modules/", on cherche directement dans le dossier du module
-            // Ex: "modules/Support/views/index" -> "./modules/Support/views/index.php" (relative to root)
             $root = __DIR__ . '/../../';
             $viewFile = $root . $viewName . '.php';
         } else {
-            // Comportement standard : cherche dans le thème
-            $viewFile = $baseDir . '/' . $viewName . '.php';
+            // 2. CHERCHER DANS LE THÈME ACTIF
+            $themeFile = $baseDir . '/' . $viewName . '.php';
+
+            if (file_exists($themeFile)) {
+                $viewFile = $themeFile;
+            } else {
+                // 3. AUTO-DÉCOUVERTE DU MODULE (Si appelé depuis un contrôleur de module)
+                $moduleFile = self::discoverModuleView($viewName);
+                if ($moduleFile && file_exists($moduleFile)) {
+                    $viewFile = $moduleFile;
+                } else {
+                    // Défaut : on garde le chemin du thème pour l'erreur 404
+                    $viewFile = $themeFile;
+                }
+            }
         }
 
         $layoutFile = $baseDir . '/layout.php';
@@ -43,6 +55,34 @@ class View {
         } else {
             echo $content;
         }
+    }
+
+    /**
+     * Tente de deviner le chemin de la vue en fonction de la classe appelante.
+     * Si View::render('index') est appelé depuis Modules\MonModule\Controllers\MonController,
+     * on cherche dans modules/MonModule/Views/index.php
+     */
+    private static function discoverModuleView($viewName) {
+        // On augmente la limite à 5 pour être sûr de remonter au contrôleur
+        // 0: discoverModuleView
+        // 1: render
+        // 2: Controller Method (C'est lui qu'on veut)
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+
+        // On cherche le premier appelant qui est une classe
+        foreach ($trace as $step) {
+            if (isset($step['class']) && strpos($step['class'], 'Modules\\') === 0) {
+                // Format: Modules\NomModule\Controllers\NomController
+                $parts = explode('\\', $step['class']);
+                // $parts[0] = Modules
+                // $parts[1] = NomModule
+                if (isset($parts[1])) {
+                    $moduleName = $parts[1];
+                    return __DIR__ . '/../../modules/' . $moduleName . '/Views/' . $viewName . '.php';
+                }
+            }
+        }
+        return null;
     }
 
     private static function getActiveTheme($context) {

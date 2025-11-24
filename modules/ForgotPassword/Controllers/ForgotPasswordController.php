@@ -71,7 +71,7 @@ class ForgotPasswordController {
             $_SESSION['captcha_str'] = "$n1 + $n2";
         }
 
-        View::render('modules/ForgotPassword/Views/forgot_password', ['error' => $error, 'success' => $success, 'captcha' => $_SESSION['captcha_str']], 'front');
+        View::render('forgot_password', ['error' => $error, 'success' => $success, 'captcha' => $_SESSION['captcha_str']], 'front');
     }
 
     public function resetPassword() {
@@ -109,6 +109,6 @@ class ForgotPasswordController {
             }
         }
 
-        View::render('modules/ForgotPassword/Views/reset_password', ['error' => $error, 'token' => $token, 'valid_link' => ($user ? true : false)], 'front');
+        View::render('reset_password', ['error' => $error, 'token' => $token, 'valid_link' => ($user ? true : false)], 'front');
     }
 }
