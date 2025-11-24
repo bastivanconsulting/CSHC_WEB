@@ -239,10 +239,11 @@ function firewall_analyze_payload() {
         '/;.*(ls|cat|wget|curl|nc)/i'
     ];
 
-    $check = function($data) use ($patterns) {
+    $check = null;
+    $check = function($data) use ($patterns, &$check) {
         if (is_array($data)) {
             foreach ($data as $value) {
-                if (call_user_func($check, $value)) return true;
+                if ($check($value)) return true;
             }
         } else {
             foreach ($patterns as $pattern) {
