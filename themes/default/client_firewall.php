@@ -225,7 +225,16 @@ function editSite(site) {
 
 function copyScript(domain) {
     const url = "<?= (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]" ?>/?firewall_js=true";
-    const script = `<script src="${url}"><\/script>`;
+    const script = `<style>body{opacity:0 !important;}</style>
+<script src="${url}"><\/script>
+<noscript>
+    <style>body{opacity:1 !important;}</style>
+    <div style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483647;background:#020617;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:sans-serif;">
+        <h1 style="font-size:2rem;margin-bottom:1rem;">JavaScript Required</h1>
+        <p>This site is protected by CSHC Firewall.</p>
+        <p>Please enable JavaScript to verify your browser.</p>
+    </div>
+</noscript>`;
     navigator.clipboard.writeText(script).then(() => {
         alert('Code copié ! Ajoutez-le dans le <head> de votre site ' + domain);
     });
