@@ -322,7 +322,7 @@ class OvhController {
         if (!empty($_POST['block'])) {
             // For the query parameter, we use standard urlencode.
             // The / -> _ substitution is only for the PATH segment to avoid Apache 404s.
-            $url .= '?block=' . urlencode($_POST['block']);
+            $url .= '?block=' . urlencode(str_replace('/', '_', $_POST['block']));
         }
         header('Location: ' . $url);
         exit;
