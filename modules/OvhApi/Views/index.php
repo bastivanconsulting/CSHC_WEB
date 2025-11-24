@@ -10,6 +10,20 @@
         </div>
     </div>
 
+    <!-- TABS -->
+    <ul class="nav nav-tabs border-secondary mb-4">
+        <li class="nav-item">
+            <a class="nav-link active bg-dark text-white border-secondary border-bottom-0" href="/admin/ovh">
+                <i class="fas fa-network-wired me-2"></i>Adresses IP
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link text-secondary" href="/admin/ovh/servers">
+                <i class="fas fa-server me-2"></i>Serveurs Dédiés
+            </a>
+        </li>
+    </ul>
+
     <?php if (!$configured): ?>
         <div class="alert alert-warning border-0 shadow-sm">
             <i class="fas fa-exclamation-triangle me-2"></i>
