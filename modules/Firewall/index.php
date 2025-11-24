@@ -24,7 +24,24 @@ try {
 }
 
 try {
+    // Check if table exists
     $db->query("SELECT 1 FROM firewall_traffic LIMIT 1");
+
+    // Check if 'domain' column exists
+    try {
+        $db->query("SELECT domain FROM firewall_traffic LIMIT 1");
+    } catch (Exception $e) {
+        // Column missing - ALTER TABLE
+        try {
+            // Drop old PK, Add column, Add new PK
+            // We need to know the PK name usually, but in MySQL simple Drop Primary Key works if it exists
+            $db->exec("ALTER TABLE firewall_traffic ADD COLUMN domain VARCHAR(100) DEFAULT 'local'");
+            $db->exec("ALTER TABLE firewall_traffic DROP PRIMARY KEY, ADD PRIMARY KEY (ip_address, domain)");
+        } catch (Exception $ex) {
+            // Log or ignore if specific error (e.g. key doesn't exist yet)
+        }
+    }
+
 } catch (Exception $e) {
     // Création table traffic (Rate Limiting)
     try {
