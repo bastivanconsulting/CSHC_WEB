@@ -43,7 +43,8 @@ class ErrorHandler {
         // But if error happens BEFORE View is required, we fallback to plain echo.
 
         if (class_exists('View')) {
-            View::render('errors/debug', ['e' => $e], 'front');
+            // Debug view is a full page, disable layout
+            View::render('errors/debug', ['e' => $e], 'front', false);
         } else {
             // Fallback plain HTML
             echo "<div style='font-family:sans-serif; background:#0f172a; color:#f8fafc; padding:2rem;'>";
@@ -57,9 +58,9 @@ class ErrorHandler {
     private static function renderGeneric($code) {
         if (class_exists('View')) {
              if ($code == 404) {
-                 View::render('errors/404', [], 'front');
+                 View::render('errors/404', [], 'front', false);
              } else {
-                 View::render('errors/500', [], 'front');
+                 View::render('errors/500', [], 'front', false);
              }
         } else {
              echo "<h1>Error $code</h1><p>Something went wrong.</p>";
