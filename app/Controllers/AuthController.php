@@ -21,6 +21,9 @@ class AuthController {
         $data = [];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // CSRF Protection
+            Csrf::check();
+
             $email = $_POST['email'];
             $password = $_POST['password'];
             
