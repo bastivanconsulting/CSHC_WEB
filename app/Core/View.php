@@ -6,8 +6,9 @@ class View {
      * @param string $viewName  Nom du fichier sans extension (ex: 'home') ou chemin relatif si commence par 'modules/'
      * @param array  $data      Données à extraire pour la vue (ex: ['user' => $u])
      * @param string $context   'front' ou 'admin' pour choisir le thème
+     * @param bool   $useLayout Utiliser le layout global (header/footer) ou juste la vue brute
      */
-    public static function render($viewName, $data = [], $context = 'front') {
+    public static function render($viewName, $data = [], $context = 'front', $useLayout = true) {
         extract($data);
 
         $theme = self::getActiveTheme($context);
@@ -50,7 +51,7 @@ class View {
         require $viewFile;
         $content = ob_get_clean();
 
-        if (file_exists($layoutFile)) {
+        if ($useLayout && file_exists($layoutFile)) {
             require $layoutFile;
         } else {
             echo $content;

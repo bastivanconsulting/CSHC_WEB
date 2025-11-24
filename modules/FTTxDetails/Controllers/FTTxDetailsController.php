@@ -13,7 +13,7 @@ class FTTxDetailsController {
         $data = ['fttx_type_key' => self::FTTX_TYPE_KEY];
 
         ob_start();
-        View::render('admin_form_fields', $data, 'admin');
+        View::render('admin_form_fields', $data, 'admin', false);
         return ob_get_clean();
     }
 
@@ -25,7 +25,7 @@ class FTTxDetailsController {
         $data['fttx_type_key'] = self::FTTX_TYPE_KEY;
 
         ob_start();
-        View::render('admin_edit_fields', $data, 'admin');
+        View::render('admin_edit_fields', $data, 'admin', false);
         return ob_get_clean();
     }
 
@@ -51,7 +51,7 @@ class FTTxDetailsController {
         $data['fttx_type_key'] = self::FTTX_TYPE_KEY;
 
         ob_start();
-        View::render('client_dashboard_details', $data, 'front');
+        View::render('client_dashboard_details', $data, 'front', false);
         return ob_get_clean();
     }
 }
