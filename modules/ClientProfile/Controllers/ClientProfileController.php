@@ -10,7 +10,7 @@ class ClientProfileController {
     public function renderAdminFormFields($args) {
         $u = $args['user'] ?? [];
         ob_start();
-        \View::render('admin_form_fields', ['u' => $u], 'admin');
+        \View::render('admin_form_fields', ['u' => $u], 'admin', false);
         return ob_get_clean();
     }
 
@@ -57,7 +57,7 @@ class ClientProfileController {
         if (empty($u['lastname']) && empty($u['firstname'])) return;
 
         ob_start();
-        \View::render('client_dashboard_widget', ['u' => $u], 'front');
+        \View::render('client_dashboard_widget', ['u' => $u], 'front', false);
         return ob_get_clean();
     }
 }
