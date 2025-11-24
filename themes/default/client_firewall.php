@@ -62,18 +62,31 @@
                             </div>
 
                             <div class="mb-3">
-                                <?php if($s['mode'] === 'active'): ?>
-                                    <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25">
-                                        <i class="fas fa-check me-1"></i> Actif
-                                    </span>
-                                <?php elseif($s['mode'] === 'challenge'): ?>
-                                    <span class="badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-25">
-                                        <i class="fas fa-fingerprint me-1"></i> Challenge JS
-                                    </span>
+                                <?php if($s['verified']): ?>
+                                    <?php if($s['mode'] === 'active'): ?>
+                                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25">
+                                            <i class="fas fa-check me-1"></i> Actif
+                                        </span>
+                                    <?php elseif($s['mode'] === 'challenge'): ?>
+                                        <span class="badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-25">
+                                            <i class="fas fa-fingerprint me-1"></i> Challenge JS
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25">
+                                            <i class="fas fa-eye me-1"></i> Monitoring
+                                        </span>
+                                    <?php endif; ?>
                                 <?php else: ?>
-                                    <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25">
-                                        <i class="fas fa-eye me-1"></i> Monitoring
-                                    </span>
+                                    <div class="alert alert-warning bg-opacity-10 border-warning text-warning p-2 small mb-0">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> <strong>Non vérifié</strong><br>
+                                        Ajoutez un enregistrement TXT :<br>
+                                        <code>_cshc-verify.<?= $s['domain'] ?></code><br>
+                                        Valeur: <code><?= $s['verification_token'] ?></code>
+                                    </div>
+                                    <form action="/client/firewall/verify" method="POST" class="mt-2">
+                                        <input type="hidden" name="id" value="<?= $s['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-warning w-100">Vérifier DNS</button>
+                                    </form>
                                 <?php endif; ?>
                             </div>
 

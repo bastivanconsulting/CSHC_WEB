@@ -14,7 +14,6 @@ try {
         $db->query("SELECT domain FROM firewall_bans LIMIT 1");
     } catch (Exception $e) {
         $db->exec("ALTER TABLE firewall_bans ADD COLUMN domain VARCHAR(100) DEFAULT 'local' AFTER ip_address");
-        // Update index
         try { $db->exec("CREATE INDEX idx_domain ON firewall_bans(domain)"); } catch(Exception $ex) {}
     }
 } catch (Exception $e) {
@@ -72,6 +71,14 @@ try {
         $db->exec("ALTER TABLE firewall_sites ADD COLUMN mode ENUM('active', 'challenge', 'monitor') DEFAULT 'active' AFTER ban_duration");
         $db->exec("ALTER TABLE firewall_sites ADD COLUMN secret_token VARCHAR(64) NULL");
     }
+    // Migration: Ajout verification
+    try {
+        $db->query("SELECT verification_token FROM firewall_sites LIMIT 1");
+    } catch (Exception $e) {
+        $db->exec("ALTER TABLE firewall_sites ADD COLUMN verification_token VARCHAR(64) NULL AFTER secret_token");
+        $db->exec("ALTER TABLE firewall_sites ADD COLUMN verified TINYINT(1) DEFAULT 0 AFTER verification_token");
+    }
+
 } catch (Exception $e) {
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS firewall_sites (
@@ -83,6 +90,8 @@ try {
             ban_duration INT DEFAULT 3600,
             mode ENUM('active', 'challenge', 'monitor') DEFAULT 'active',
             secret_token VARCHAR(64) NULL,
+            verification_token VARCHAR(64) NULL,
+            verified TINYINT(1) DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(domain)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -136,6 +145,10 @@ if (isset($_GET['firewall_js'])) {
         var token = getToken();
         var data = "origin=" + encodeURIComponent(domain);
         if(token) data += "&token=" + encodeURIComponent(token);
+
+        // Collect minimal browser signals for basic analysis
+        data += "&ua=" + encodeURIComponent(navigator.userAgent);
+
         xhr.send(data);
     }
 
@@ -205,6 +218,51 @@ JS;
 }
 
 // 4. LOGIQUE WAF INTERNE & HELPER FUNCTIONS
+
+// --- INTELLIGENT WAF RULES ---
+function firewall_analyze_payload() {
+    // Basic OWASP-like signatures (SQLi, XSS, Path Traversal)
+    $patterns = [
+        // SQL Injection
+        '/union\s+select/i',
+        '/union\s+all\s+select/i',
+        '/information_schema/i',
+        '/waitfor\s+delay/i',
+        '/exec\s+\(/i',
+        '/concat\s*\(/i',
+        // XSS
+        '/<script/i',
+        '/javascript:/i',
+        '/onerror\s*=/i',
+        '/onload\s*=/i',
+        // Path Traversal
+        '/\.\.\//',
+        '/\/etc\/passwd/',
+        '/\/bin\/sh/',
+        // Shell Injection
+        '/;.*(ls|cat|wget|curl|nc)/i'
+    ];
+
+    $check = function($data) use ($patterns) {
+        if (is_array($data)) {
+            foreach ($data as $value) {
+                if (call_user_func($check, $value)) return true;
+            }
+        } else {
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $data)) return true;
+            }
+        }
+        return false;
+    };
+
+    if ($check($_GET) || $check($_POST) || $check($_COOKIE)) {
+        return true;
+    }
+    return false;
+}
+// -----------------------------
+
 function firewall_get_ip() {
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
@@ -229,10 +287,24 @@ function firewall_api_check() {
         return;
     }
 
+    // [VERIFICATION] Si pas vérifié, on bloque ou on met en warning?
+    // Le client dit "Je pense aussi qu'il faut faire une validation".
+    // Pour l'instant si pas vérifié, on peut bloquer.
+    if ($site['verified'] == 0) {
+        echo json_encode(['status' => 'blocked', 'reason' => 'Domain Verification Pending']);
+        return;
+    }
+
     $ip = firewall_get_ip();
 
-    // 1. Check Global Ban (domain='local') OR Site Ban (domain=$origin)
-    // On vérifie les deux : si banni globalement OU spécifiquement sur ce site
+    // [INTELLIGENT WAF] Analyze Payload
+    if (firewall_analyze_payload()) {
+        firewall_ban_ip($ip, "Malicious Payload Detected (WAF)", 86400, $origin);
+        echo json_encode(['status' => 'blocked', 'reason' => 'Malicious Payload']);
+        return;
+    }
+
+    // 1. Check Bans
     $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (domain = 'local' OR domain = ?) AND (expires_at IS NULL OR expires_at > NOW())");
     $stmt->execute([$ip, $origin]);
     $ban = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -273,7 +345,6 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
     $db = Database::connect();
     $now = time();
 
-    // Nettoyage périodique (optimisation)
     if (rand(1, 100) === 1) {
         $db->exec("DELETE FROM firewall_traffic WHERE first_request_at < " . ($now - $window));
     }
@@ -284,13 +355,10 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
 
     if ($traffic) {
         if ($now - $traffic['first_request_at'] > $window) {
-            // Reset window
             $upd = $db->prepare("UPDATE firewall_traffic SET request_count = 1, first_request_at = ? WHERE ip_address = ? AND domain = ?");
             $upd->execute([$now, $ip, $domain]);
         } else {
-            // Increment
             if ($traffic['request_count'] >= $limit) {
-                // BAN IP for this domain
                 firewall_ban_ip($ip, "Rate Limit Exceeded on $domain", $banDuration, $domain);
 
                 if ($domain === 'local') {
@@ -312,11 +380,10 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
 
 
 function firewall_check() {
-    // Mode Local
     $db = Database::connect();
     $ip = firewall_get_ip();
 
-    // Check Bans (Local only)
+    // Check Bans
     $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND domain = 'local' AND (expires_at IS NULL OR expires_at > NOW())");
     $stmt->execute([$ip]);
     $ban = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -362,5 +429,11 @@ function firewall_render_denied($ip, $reason) {
 
 // Exécution immédiate (pour le trafic local)
 if (!isset($_GET['firewall_api']) && !isset($_GET['firewall_js'])) {
+    // Intelligent WAF for Local
+    if (firewall_analyze_payload()) {
+        firewall_ban_ip(firewall_get_ip(), "Malicious Payload (Local)", 86400, 'local');
+        firewall_render_denied(firewall_get_ip(), "Malicious Payload");
+        exit;
+    }
     firewall_check();
 }

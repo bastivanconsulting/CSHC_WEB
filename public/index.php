@@ -85,6 +85,7 @@ $router->add('client/firewall/delete', 'ClientFirewallController', 'delete');
 $router->add('client/firewall/logs', 'ClientFirewallController', 'logs');
 $router->add('client/firewall/block', 'ClientFirewallController', 'blockIp');
 $router->add('client/firewall/unblock', 'ClientFirewallController', 'unblockIp');
+$router->add('client/firewall/verify', 'ClientFirewallController', 'verify');
 
 require_once __DIR__ . '/../app/Core/Settings.php';
 
