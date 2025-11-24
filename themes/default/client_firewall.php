@@ -82,10 +82,13 @@
                                 <span>Window: <strong class="text-white"><?= $s['req_window'] ?></strong>s</span>
                             </div>
 
-                            <div class="mt-auto pt-3 border-top border-secondary border-opacity-25">
-                                <button class="btn btn-sm btn-outline-light w-100" onclick="copyScript('<?= $s['domain'] ?>')">
-                                    <i class="fas fa-code me-2"></i> Copier le Script JS
+                            <div class="mt-auto pt-3 border-top border-secondary border-opacity-25 d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-light flex-grow-1" onclick="copyScript('<?= $s['domain'] ?>')">
+                                    <i class="fas fa-code me-2"></i> Script
                                 </button>
+                                <a href="/client/firewall/logs" class="btn btn-sm btn-outline-info flex-grow-1">
+                                    <i class="fas fa-chart-line me-2"></i> Logs
+                                </a>
                             </div>
                         </div>
                     </div>

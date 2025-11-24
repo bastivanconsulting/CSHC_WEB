@@ -9,16 +9,26 @@ $db = Database::connect();
 // 1. AUTO-MIGRATION
 try {
     $db->query("SELECT 1 FROM firewall_bans LIMIT 1");
+    // Migration: Ajout colonne domain si absente
+    try {
+        $db->query("SELECT domain FROM firewall_bans LIMIT 1");
+    } catch (Exception $e) {
+        $db->exec("ALTER TABLE firewall_bans ADD COLUMN domain VARCHAR(100) DEFAULT 'local' AFTER ip_address");
+        // Update index
+        try { $db->exec("CREATE INDEX idx_domain ON firewall_bans(domain)"); } catch(Exception $ex) {}
+    }
 } catch (Exception $e) {
     // Création table bans
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS firewall_bans (
             id INT AUTO_INCREMENT PRIMARY KEY,
             ip_address VARCHAR(45) NOT NULL,
+            domain VARCHAR(100) DEFAULT 'local',
             reason VARCHAR(255) DEFAULT 'Manual Ban',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             expires_at DATETIME NULL,
-            INDEX(ip_address)
+            INDEX(ip_address),
+            INDEX(domain)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     } catch (Exception $ex) {}
 }
@@ -33,13 +43,9 @@ try {
     } catch (Exception $e) {
         // Column missing - ALTER TABLE
         try {
-            // Drop old PK, Add column, Add new PK
-            // We need to know the PK name usually, but in MySQL simple Drop Primary Key works if it exists
             $db->exec("ALTER TABLE firewall_traffic ADD COLUMN domain VARCHAR(100) DEFAULT 'local'");
             $db->exec("ALTER TABLE firewall_traffic DROP PRIMARY KEY, ADD PRIMARY KEY (ip_address, domain)");
-        } catch (Exception $ex) {
-            // Log or ignore if specific error (e.g. key doesn't exist yet)
-        }
+        } catch (Exception $ex) {}
     }
 
 } catch (Exception $e) {
@@ -138,11 +144,9 @@ if (isset($_GET['firewall_js'])) {
         else if(res.status === 'challenge') {
             showChallenge();
         }
-        // allowed = do nothing
     }
 
     function showChallenge() {
-        // Overlay HTML
         var html = \`
         <div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.95);backdrop-filter:blur(10px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI', sans-serif;">
             <div style="background:rgba(30, 41, 59, 0.6);border:1px solid rgba(255,255,255,0.1);padding:3rem;border-radius:1rem;text-align:center;max-width:400px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
@@ -158,7 +162,6 @@ if (isset($_GET['firewall_js'])) {
         </div>
         \`;
 
-        // Remove existing content to prevent flashing? No, overlay is better.
         var div = document.createElement('div');
         div.innerHTML = html;
         document.body.appendChild(div);
@@ -168,7 +171,6 @@ if (isset($_GET['firewall_js'])) {
             this.style.opacity = '0.7';
             this.disabled = true;
 
-            // Simulating "work"
             setTimeout(function(){
                 verifyChallenge();
             }, 1500);
@@ -194,14 +196,13 @@ if (isset($_GET['firewall_js'])) {
         xhr.send("origin=" + encodeURIComponent(domain));
     }
 
-    // Init
     checkAccess();
 })();
 JS;
     exit;
 }
 
-// 4. LOGIQUE WAF INTERNE
+// 4. LOGIQUE WAF INTERNE & HELPER FUNCTIONS
 function firewall_get_ip() {
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
@@ -222,16 +223,16 @@ function firewall_api_check() {
     $site = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$site) {
-        // CORRECTION: Si le site n'est pas inscrit, on bloque l'accès (Full Page 403)
         echo json_encode(['status' => 'blocked', 'reason' => 'Unregistered Domain']);
         return;
     }
 
     $ip = firewall_get_ip();
 
-    // 1. Check Global Ban
-    $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (expires_at IS NULL OR expires_at > NOW())");
-    $stmt->execute([$ip]);
+    // 1. Check Global Ban (domain='local') OR Site Ban (domain=$origin)
+    // On vérifie les deux : si banni globalement OU spécifiquement sur ce site
+    $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (domain = 'local' OR domain = ?) AND (expires_at IS NULL OR expires_at > NOW())");
+    $stmt->execute([$ip, $origin]);
     $ban = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($ban) {
@@ -242,10 +243,7 @@ function firewall_api_check() {
     // 2. Check Challenge Mode
     if ($site['mode'] === 'challenge') {
         $clientToken = $_POST['token'] ?? '';
-        // Validation basique du token : hash(ip + salt)
-        // Le salt devrait être unique par site, ici on utilise le secret_token ou une constante
         $serverToken = hash('sha256', $ip . 'CSHC_SALT_' . date('Ymd'));
-
         if ($clientToken !== $serverToken) {
             echo json_encode(['status' => 'challenge']);
             return;
@@ -265,11 +263,7 @@ function firewall_api_verify() {
     $origin = $_POST['origin'] ?? '';
     $ip = firewall_get_ip();
 
-    // Génération du token
     $token = hash('sha256', $ip . 'CSHC_SALT_' . date('Ymd'));
-
-    // On pourrait logger la réussite ici
-
     echo json_encode(['status' => 'success', 'token' => $token]);
 }
 
@@ -277,7 +271,7 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
     $db = Database::connect();
     $now = time();
 
-    // Nettoyage périodique
+    // Nettoyage périodique (optimisation)
     if (rand(1, 100) === 1) {
         $db->exec("DELETE FROM firewall_traffic WHERE first_request_at < " . ($now - $window));
     }
@@ -288,14 +282,14 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
 
     if ($traffic) {
         if ($now - $traffic['first_request_at'] > $window) {
-            // Reset
+            // Reset window
             $upd = $db->prepare("UPDATE firewall_traffic SET request_count = 1, first_request_at = ? WHERE ip_address = ? AND domain = ?");
             $upd->execute([$now, $ip, $domain]);
         } else {
             // Increment
             if ($traffic['request_count'] >= $limit) {
-                // BAN
-                firewall_ban_ip($ip, "Rate Limit Exceeded on $domain", $banDuration);
+                // BAN IP for this domain
+                firewall_ban_ip($ip, "Rate Limit Exceeded on $domain", $banDuration, $domain);
 
                 if ($domain === 'local') {
                     firewall_render_denied($ip, "Rate Limit Exceeded");
@@ -320,8 +314,8 @@ function firewall_check() {
     $db = Database::connect();
     $ip = firewall_get_ip();
 
-    // Check Bans
-    $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (expires_at IS NULL OR expires_at > NOW())");
+    // Check Bans (Local only)
+    $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND domain = 'local' AND (expires_at IS NULL OR expires_at > NOW())");
     $stmt->execute([$ip]);
     $ban = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -344,11 +338,11 @@ function firewall_check() {
     firewall_enforce_limit($ip, $limit, $window, 3600, 'local');
 }
 
-function firewall_ban_ip($ip, $reason, $durationSeconds = 86400) {
+function firewall_ban_ip($ip, $reason, $durationSeconds = 86400, $domain = 'local') {
     $db = Database::connect();
     $expires = date('Y-m-d H:i:s', time() + $durationSeconds);
-    $stmt = $db->prepare("INSERT INTO firewall_bans (ip_address, reason, expires_at) VALUES (?, ?, ?)");
-    $stmt->execute([$ip, $reason, $expires]);
+    $stmt = $db->prepare("INSERT INTO firewall_bans (ip_address, domain, reason, expires_at) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$ip, $domain, $reason, $expires]);
 }
 
 function firewall_render_denied($ip, $reason) {
