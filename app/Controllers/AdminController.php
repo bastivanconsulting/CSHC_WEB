@@ -265,6 +265,14 @@ class AdminController {
             Settings::set('site_url', $siteUrl);
             Settings::set('site_name', $siteName);
 
+            // Firewall Settings
+            if (isset($_POST['firewall_limit'])) {
+                Settings::set('firewall_limit', (int)$_POST['firewall_limit']);
+            }
+            if (isset($_POST['firewall_window'])) {
+                Settings::set('firewall_window', (int)$_POST['firewall_window']);
+            }
+
             // On pourrait ajouter un flash message ici
         }
         header('Location: /admin/settings'); exit;

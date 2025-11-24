@@ -21,6 +21,23 @@
                             <div class="form-text text-secondary">L'URL principale du site (ex: https://dev.cshybridconnect.com/). Doit inclure http:// ou https://.</div>
                         </div>
 
+                        <hr class="border-secondary opacity-25 my-4">
+
+                        <h5 class="text-white mb-3"><i class="fas fa-shield-alt me-2 text-danger"></i>Sécurité & Pare-feu</h5>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label for="firewall_limit" class="form-label text-secondary small text-uppercase fw-bold">Limite de Requêtes</label>
+                                <input type="number" class="form-control bg-dark text-white border-secondary" id="firewall_limit" name="firewall_limit" value="<?= htmlspecialchars($settings['firewall_limit'] ?? 100) ?>" min="1" required>
+                                <div class="form-text text-secondary">Nombre max de requêtes autorisées par IP.</div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label for="firewall_window" class="form-label text-secondary small text-uppercase fw-bold">Fenêtre de temps (secondes)</label>
+                                <input type="number" class="form-control bg-dark text-white border-secondary" id="firewall_window" name="firewall_window" value="<?= htmlspecialchars($settings['firewall_window'] ?? 60) ?>" min="1" required>
+                                <div class="form-text text-secondary">Durée pour la limite (ex: 60s).</div>
+                            </div>
+                        </div>
+
                         <div class="d-flex justify-content-end">
                             <button type="submit" class="btn btn-primary px-4">
                                 <i class="fas fa-save me-2"></i> Enregistrer les modifications

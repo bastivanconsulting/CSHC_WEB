@@ -47,7 +47,9 @@ function firewall_get_ip() {
 }
 
 function firewall_check() {
-    global $db;
+    // CORRECTION: Utilisation de Database::connect() au lieu de global $db
+    // Cela évite l'erreur "Call to a member function prepare() on null"
+    $db = Database::connect();
     $ip = firewall_get_ip();
 
     // A. CHECK BANS
@@ -60,9 +62,22 @@ function firewall_check() {
         exit;
     }
 
-    // B. RATE LIMITING (Ex: 100 req / minute)
-    $limit = 100;
-    $window = 60; // secondes
+    // B. RATE LIMITING
+    // Récupération des limites via Settings (ou valeurs par défaut)
+    // Settings::get() est statique et dispo si Settings chargé (ce qui est le cas dans index.php)
+    // Si Settings n'est pas dispo (ex: script externe), on garde le défaut.
+    if (class_exists('Settings')) {
+        $limit = (int) Settings::get('firewall_limit', 100);
+        $window = (int) Settings::get('firewall_window', 60);
+    } else {
+        $limit = 100;
+        $window = 60;
+    }
+
+    // Sécurité anti-crash si admin met 0
+    if ($limit <= 0) $limit = 100;
+    if ($window <= 0) $window = 60;
+
     $now = time();
 
     // Nettoyage périodique (chance 1/100) pour éviter d'exploser la table
@@ -99,7 +114,8 @@ function firewall_check() {
 }
 
 function firewall_ban_ip($ip, $reason, $durationSeconds = 86400) {
-    global $db;
+    // CORRECTION: Utilisation de Database::connect()
+    $db = Database::connect();
     $expires = date('Y-m-d H:i:s', time() + $durationSeconds);
     $stmt = $db->prepare("INSERT INTO firewall_bans (ip_address, reason, expires_at) VALUES (?, ?, ?)");
     $stmt->execute([$ip, $reason, $expires]);
