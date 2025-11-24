@@ -81,6 +81,7 @@ $router->add('admin/save-service', 'AdminController', 'saveService'); // Sauvega
 $router->add('client/cancel', 'ClientController', 'requestCancellation'); // Demande résiliation
 $router->add('client/firewall', 'ClientFirewallController', 'index');
 $router->add('client/firewall/add', 'ClientFirewallController', 'add');
+$router->add('client/firewall/update', 'ClientFirewallController', 'update');
 $router->add('client/firewall/delete', 'ClientFirewallController', 'delete');
 $router->add('client/firewall/logs', 'ClientFirewallController', 'logs');
 $router->add('client/firewall/block', 'ClientFirewallController', 'blockIp');
