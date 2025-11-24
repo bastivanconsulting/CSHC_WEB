@@ -133,6 +133,32 @@ class ClientFirewallController {
         header('Location: /client/firewall');
     }
 
+    public function update() {
+        $this->checkClient();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $id = $_POST['id'];
+            $mode = $_POST['mode'];
+            $limit = (int)$_POST['req_limit'];
+            $window = (int)$_POST['req_window'];
+
+            $db = Database::connect();
+            // Verify ownership
+            $stmt = $db->prepare("SELECT 1 FROM firewall_sites WHERE id = ? AND user_id = ?");
+            $stmt->execute([$id, $_SESSION['user']['id']]);
+            if ($stmt->fetch()) {
+                $upd = $db->prepare("UPDATE firewall_sites SET mode = ?, req_limit = ?, req_window = ? WHERE id = ?");
+                $upd->execute([
+                    in_array($mode, ['active', 'challenge', 'monitor']) ? $mode : 'active',
+                    $limit > 0 ? $limit : 100,
+                    $window > 0 ? $window : 60,
+                    $id
+                ]);
+                $_SESSION['flash_success'] = "Paramètres mis à jour.";
+            }
+        }
+        header('Location: /client/firewall');
+    }
+
     public function delete() {
         $this->checkClient();
         if (isset($_POST['id'])) {

@@ -50,6 +50,12 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
                                         <li>
+                                            <button class="dropdown-item" onclick='editSite(<?= json_encode($s) ?>)'>
+                                                <i class="fas fa-edit me-2"></i> Configurer
+                                            </button>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
                                             <form action="/client/firewall/delete" method="POST" onsubmit="return confirm('Arrêter la protection ?');">
                                                 <input type="hidden" name="id" value="<?= $s['id'] ?>">
                                                 <button type="submit" class="dropdown-item text-danger">
@@ -156,7 +162,63 @@
     </div>
 </div>
 
+<!-- Modal Edit -->
+<div class="modal fade" id="editSiteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card border border-secondary border-opacity-25 text-white">
+            <div class="modal-header border-bottom border-secondary border-opacity-25">
+                <h5 class="modal-title">Configurer le site</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/client/firewall/update" method="POST">
+                <input type="hidden" name="id" id="edit_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small text-uppercase">Domaine</label>
+                        <input type="text" id="edit_domain" class="form-control bg-dark text-white border-secondary" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small text-uppercase">Mode de Protection</label>
+                        <select name="mode" id="edit_mode" class="form-select bg-dark text-white border-secondary">
+                            <option value="active">Bloquer (Standard)</option>
+                            <option value="challenge">Challenge JS (Cloudflare-style)</option>
+                            <option value="monitor">Monitoring (Log Only)</option>
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label text-secondary small text-uppercase">Limite (req)</label>
+                            <input type="number" name="req_limit" id="edit_req_limit" class="form-control bg-dark text-white border-secondary" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label text-secondary small text-uppercase">Fenêtre (sec)</label>
+                            <input type="number" name="req_window" id="edit_req_window" class="form-control bg-dark text-white border-secondary" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+function editSite(site) {
+    document.getElementById('edit_id').value = site.id;
+    document.getElementById('edit_domain').value = site.domain;
+    document.getElementById('edit_mode').value = site.mode;
+    document.getElementById('edit_req_limit').value = site.req_limit;
+    document.getElementById('edit_req_window').value = site.req_window;
+
+    var modal = new bootstrap.Modal(document.getElementById('editSiteModal'));
+    modal.show();
+}
+
 function copyScript(domain) {
     const url = "<?= (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]" ?>/?firewall_js=true";
     const script = `<script src="${url}"><\/script>`;
