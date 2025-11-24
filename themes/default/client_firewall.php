@@ -50,13 +50,14 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
                                         <li>
-                                            <button class="dropdown-item" onclick='editSite(<?= json_encode($s) ?>)'>
+                                            <button class="dropdown-item" onclick='editSite(<?= htmlspecialchars(json_encode($s), ENT_QUOTES, 'UTF-8') ?>)'>
                                                 <i class="fas fa-edit me-2"></i> Configurer
                                             </button>
                                         </li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
                                             <form action="/client/firewall/delete" method="POST" onsubmit="return confirm('Arrêter la protection ?');">
+                                                <?= Csrf::field() ?>
                                                 <input type="hidden" name="id" value="<?= $s['id'] ?>">
                                                 <button type="submit" class="dropdown-item text-danger">
                                                     <i class="fas fa-trash me-2"></i> Supprimer
@@ -90,6 +91,7 @@
                                         Valeur: <code><?= $s['verification_token'] ?></code>
                                     </div>
                                     <form action="/client/firewall/verify" method="POST" class="mt-2">
+                                        <?= Csrf::field() ?>
                                         <input type="hidden" name="id" value="<?= $s['id'] ?>">
                                         <button type="submit" class="btn btn-sm btn-warning w-100">Vérifier DNS</button>
                                     </form>
@@ -126,6 +128,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form action="/client/firewall/add" method="POST">
+                <?= Csrf::field() ?>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label text-secondary small text-uppercase">Domaine</label>
@@ -171,6 +174,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form action="/client/firewall/update" method="POST">
+                <?= Csrf::field() ?>
                 <input type="hidden" name="id" id="edit_id">
                 <div class="modal-body">
                     <div class="mb-3">
