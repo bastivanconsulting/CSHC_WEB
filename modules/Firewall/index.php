@@ -222,7 +222,8 @@ function firewall_api_check() {
     $site = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$site) {
-        echo json_encode(['status' => 'allowed', 'msg' => 'Site not protected']);
+        // CORRECTION: Si le site n'est pas inscrit, on bloque l'accès (Full Page 403)
+        echo json_encode(['status' => 'blocked', 'reason' => 'Unregistered Domain']);
         return;
     }
 
