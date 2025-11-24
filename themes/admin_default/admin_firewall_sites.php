@@ -15,10 +15,10 @@
                             <thead class="border-bottom border-secondary border-opacity-25 text-secondary small text-uppercase">
                                 <tr>
                                     <th class="ps-4">Domaine</th>
+                                    <th>Propriétaire</th>
+                                    <th>Mode</th>
                                     <th>Limite</th>
-                                    <th>Fenêtre</th>
                                     <th>Ban (sec)</th>
-                                    <th>Script JS</th>
                                     <th class="text-end pe-4">Actions</th>
                                 </tr>
                             </thead>
@@ -37,17 +37,27 @@
                                             <i class="fas fa-globe me-2 text-info"></i> <?= htmlspecialchars($s['domain']) ?>
                                         </td>
                                         <td>
+                                            <?php if($s['user_id']): ?>
+                                                <span class="badge bg-primary bg-opacity-25 text-primary">Client #<?= $s['user_id'] ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-success bg-opacity-25 text-success">Admin</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if(($s['mode'] ?? 'active') === 'challenge'): ?>
+                                                <span class="badge bg-warning text-dark">Challenge</span>
+                                            <?php elseif(($s['mode'] ?? 'active') === 'monitor'): ?>
+                                                <span class="badge bg-info text-dark">Monitor</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-success">Actif</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
                                             <span class="badge bg-secondary bg-opacity-25 border border-secondary text-white">
-                                                <?= $s['req_limit'] ?> req
+                                                <?= $s['req_limit'] ?> / <?= $s['req_window'] ?>s
                                             </span>
                                         </td>
-                                        <td><?= $s['req_window'] ?>s</td>
                                         <td><?= $s['ban_duration'] ?>s</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info" onclick="copyScript('<?= $s['domain'] ?>')">
-                                                <i class="fas fa-code me-1"></i> Copier
-                                            </button>
-                                        </td>
                                         <td class="text-end pe-4">
                                             <form action="/admin/firewall/sites/delete" method="POST" class="d-inline" onsubmit="return confirm('Supprimer la protection pour ce site ?');">
                                                 <input type="hidden" name="id" value="<?= $s['id'] ?>">

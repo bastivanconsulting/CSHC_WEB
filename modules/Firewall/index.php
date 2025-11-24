@@ -35,29 +35,31 @@ try {
             domain VARCHAR(100) DEFAULT 'local',
             PRIMARY KEY (ip_address, domain)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-        // Note: Modified PK to include domain for multi-site separation
-    } catch (Exception $ex) {
-         // Migration for existing table without domain support if needed?
-         // For now, assuming fresh or manually handled if key conflict.
-         // Let's not break existing logic if column missing.
-         try {
-             $db->exec("ALTER TABLE firewall_traffic ADD COLUMN domain VARCHAR(100) DEFAULT 'local'");
-             $db->exec("ALTER TABLE firewall_traffic DROP PRIMARY KEY, ADD PRIMARY KEY (ip_address, domain)");
-         } catch(Exception $e2) {}
-    }
+    } catch (Exception $ex) {}
 }
 
 // Creation table firewall_sites
 try {
     $db->query("SELECT 1 FROM firewall_sites LIMIT 1");
+    // Migration: Ajout colonnes user_id et mode si absentes
+    try {
+        $db->query("SELECT user_id FROM firewall_sites LIMIT 1");
+    } catch (Exception $e) {
+        $db->exec("ALTER TABLE firewall_sites ADD COLUMN user_id INT NULL AFTER id");
+        $db->exec("ALTER TABLE firewall_sites ADD COLUMN mode ENUM('active', 'challenge', 'monitor') DEFAULT 'active' AFTER ban_duration");
+        $db->exec("ALTER TABLE firewall_sites ADD COLUMN secret_token VARCHAR(64) NULL");
+    }
 } catch (Exception $e) {
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS firewall_sites (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
             domain VARCHAR(255) NOT NULL,
             req_limit INT DEFAULT 100,
             req_window INT DEFAULT 60,
             ban_duration INT DEFAULT 3600,
+            mode ENUM('active', 'challenge', 'monitor') DEFAULT 'active',
+            secret_token VARCHAR(64) NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(domain)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -65,30 +67,118 @@ try {
 }
 
 // 2. API LOGIC (Pour sites externes)
-if (isset($_GET['firewall_api']) && $_GET['firewall_api'] === 'check') {
-    firewall_api_check();
-    exit;
+if (isset($_GET['firewall_api'])) {
+    if ($_GET['firewall_api'] === 'check') {
+        firewall_api_check();
+        exit;
+    }
+    if ($_GET['firewall_api'] === 'verify') {
+        firewall_api_verify();
+        exit;
+    }
 }
 
 // 3. JS SERVING
 if (isset($_GET['firewall_js'])) {
     header('Content-Type: application/javascript');
-    $apiUrl = (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]/?firewall_api=check";
+    $apiUrl = (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]/?firewall_api";
     echo <<<JS
 (function(){
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", "$apiUrl", true);
-    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-            var res = JSON.parse(xhr.responseText);
-            if(res.status === 'blocked') {
-                document.body.innerHTML = '<div style="background:#020617;color:white;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;"><h1>Access Denied by CSHC WAF</h1></div>';
-                // Ou redirection: window.location.href = res.redirect_url;
+    var API_URL = "$apiUrl";
+    var domain = window.location.hostname;
+
+    // Helper: Get Token
+    function getToken() {
+        return localStorage.getItem('cshc_waf_token_' + domain);
+    }
+
+    // Helper: Set Token
+    function setToken(token) {
+        localStorage.setItem('cshc_waf_token_' + domain, token);
+    }
+
+    // Main Check
+    function checkAccess() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", API_URL + "=check", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                var res = JSON.parse(xhr.responseText);
+                handleResponse(res);
             }
+        };
+        var token = getToken();
+        var data = "origin=" + encodeURIComponent(domain);
+        if(token) data += "&token=" + encodeURIComponent(token);
+        xhr.send(data);
+    }
+
+    function handleResponse(res) {
+        if(res.status === 'blocked') {
+            document.body.innerHTML = '<div style="background:#020617;color:#ef4444;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;"><h1 style="font-size:3rem;margin-bottom:1rem;">ACCESS DENIED</h1><p>Your IP has been blocked by CSHC Security.</p><p style="color:#94a3b8;font-size:0.9rem;">ID: ' + (res.reason || 'WAF') + '</p></div>';
         }
-    };
-    xhr.send("origin=" + encodeURIComponent(window.location.hostname));
+        else if(res.status === 'challenge') {
+            showChallenge();
+        }
+        // allowed = do nothing
+    }
+
+    function showChallenge() {
+        // Overlay HTML
+        var html = \`
+        <div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.95);backdrop-filter:blur(10px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI', sans-serif;">
+            <div style="background:rgba(30, 41, 59, 0.6);border:1px solid rgba(255,255,255,0.1);padding:3rem;border-radius:1rem;text-align:center;max-width:400px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+                <div style="margin-bottom:1.5rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+                <h2 style="color:white;margin-bottom:1rem;font-size:1.5rem;">Security Check</h2>
+                <p style="color:#94a3b8;margin-bottom:2rem;">Please verify you are human to access this site.</p>
+                <button id="cshc-solve-btn" style="background:#2563eb;color:white;border:none;padding:0.75rem 2rem;border-radius:0.5rem;font-weight:bold;cursor:pointer;transition:all 0.2s;">
+                    Verify Now
+                </button>
+            </div>
+        </div>
+        \`;
+
+        // Remove existing content to prevent flashing? No, overlay is better.
+        var div = document.createElement('div');
+        div.innerHTML = html;
+        document.body.appendChild(div);
+
+        document.getElementById('cshc-solve-btn').onclick = function() {
+            this.innerHTML = 'Verifying...';
+            this.style.opacity = '0.7';
+            this.disabled = true;
+
+            // Simulating "work"
+            setTimeout(function(){
+                verifyChallenge();
+            }, 1500);
+        };
+    }
+
+    function verifyChallenge() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", API_URL + "=verify", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                var res = JSON.parse(xhr.responseText);
+                if(res.status === 'success') {
+                    setToken(res.token);
+                    document.getElementById('cshc-challenge-overlay').remove();
+                } else {
+                    alert('Verification failed. Please try again.');
+                    location.reload();
+                }
+            }
+        };
+        xhr.send("origin=" + encodeURIComponent(domain));
+    }
+
+    // Init
+    checkAccess();
 })();
 JS;
     exit;
@@ -100,13 +190,11 @@ function firewall_get_ip() {
 }
 
 function firewall_api_check() {
-    // CORS
     header("Access-Control-Allow-Origin: *");
     header("Content-Type: application/json");
 
     $origin = $_POST['origin'] ?? '';
-    // Nettoyage sommaire de l'origine
-    $origin = parse_url($origin, PHP_URL_HOST) ?: $origin; // Si http://...
+    $origin = parse_url($origin, PHP_URL_HOST) ?: $origin;
     if (!$origin) $origin = 'unknown';
 
     $db = Database::connect();
@@ -117,15 +205,13 @@ function firewall_api_check() {
     $site = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$site) {
-        // Site non géré : on laisse passer ou on bloque ?
-        // Par défaut on laisse passer mais sans protection
         echo json_encode(['status' => 'allowed', 'msg' => 'Site not protected']);
         return;
     }
 
     $ip = firewall_get_ip();
 
-    // Check Global Ban
+    // 1. Check Global Ban
     $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (expires_at IS NULL OR expires_at > NOW())");
     $stmt->execute([$ip]);
     $ban = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -135,14 +221,38 @@ function firewall_api_check() {
         return;
     }
 
-    // Rate Limit specific to site
-    $limit = $site['req_limit'];
-    $window = $site['req_window'];
-    $banDuration = $site['ban_duration'];
+    // 2. Check Challenge Mode
+    if ($site['mode'] === 'challenge') {
+        $clientToken = $_POST['token'] ?? '';
+        // Validation basique du token : hash(ip + salt)
+        // Le salt devrait être unique par site, ici on utilise le secret_token ou une constante
+        $serverToken = hash('sha256', $ip . 'CSHC_SALT_' . date('Ymd'));
 
-    firewall_enforce_limit($ip, $limit, $window, $banDuration, $origin);
+        if ($clientToken !== $serverToken) {
+            echo json_encode(['status' => 'challenge']);
+            return;
+        }
+    }
+
+    // 3. Enforce Limits
+    firewall_enforce_limit($ip, $site['req_limit'], $site['req_window'], $site['ban_duration'], $origin);
 
     echo json_encode(['status' => 'allowed']);
+}
+
+function firewall_api_verify() {
+    header("Access-Control-Allow-Origin: *");
+    header("Content-Type: application/json");
+
+    $origin = $_POST['origin'] ?? '';
+    $ip = firewall_get_ip();
+
+    // Génération du token
+    $token = hash('sha256', $ip . 'CSHC_SALT_' . date('Ymd'));
+
+    // On pourrait logger la réussite ici
+
+    echo json_encode(['status' => 'success', 'token' => $token]);
 }
 
 function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $domain = 'local') {
@@ -167,15 +277,12 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
             // Increment
             if ($traffic['request_count'] >= $limit) {
                 // BAN
-                firewall_ban_ip($ip, "Rate Limit Exceeded on $domain ($limit req/$window s)", $banDuration);
+                firewall_ban_ip($ip, "Rate Limit Exceeded on $domain", $banDuration);
 
-                // Si c'est l'API, on ne fait pas exit mais on retourne JSON dans l'appelant
-                // Si c'est local, on fait exit
                 if ($domain === 'local') {
                     firewall_render_denied($ip, "Rate Limit Exceeded");
                     exit;
                 } else {
-                    // Pour l'API, on doit retourner le blocage immédiatement
                     echo json_encode(['status' => 'blocked', 'reason' => "Rate Limit Exceeded"]);
                     exit;
                 }
