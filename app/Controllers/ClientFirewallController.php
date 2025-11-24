@@ -33,6 +33,7 @@ class ClientFirewallController {
     public function add() {
         $this->checkClient();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::check();
             $inputDomain = trim($_POST['domain']);
             $limit = (int)$_POST['req_limit'];
             $window = (int)$_POST['req_window'];
@@ -100,6 +101,7 @@ class ClientFirewallController {
     public function verify() {
         $this->checkClient();
         if (isset($_POST['id'])) {
+            Csrf::check();
             $db = Database::connect();
             $stmt = $db->prepare("SELECT * FROM firewall_sites WHERE id = ? AND user_id = ?");
             $stmt->execute([$_POST['id'], $_SESSION['user']['id']]);
@@ -136,6 +138,7 @@ class ClientFirewallController {
     public function update() {
         $this->checkClient();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::check();
             $id = $_POST['id'];
             $mode = $_POST['mode'];
             $limit = (int)$_POST['req_limit'];
@@ -162,6 +165,7 @@ class ClientFirewallController {
     public function delete() {
         $this->checkClient();
         if (isset($_POST['id'])) {
+            Csrf::check();
             $db = Database::connect();
             $stmt = $db->prepare("DELETE FROM firewall_sites WHERE id = ? AND user_id = ?");
             $stmt->execute([$_POST['id'], $_SESSION['user']['id']]);
@@ -201,6 +205,7 @@ class ClientFirewallController {
     public function blockIp() {
         $this->checkClient();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::check();
             $ip = trim($_POST['ip_address']);
             $domain = $_POST['domain'];
 
@@ -225,6 +230,7 @@ class ClientFirewallController {
     public function unblockIp() {
         $this->checkClient();
         if (isset($_POST['id'])) {
+             Csrf::check();
              $db = Database::connect();
              // Ensure the ban belongs to a domain owned by the user
              $stmt = $db->prepare("

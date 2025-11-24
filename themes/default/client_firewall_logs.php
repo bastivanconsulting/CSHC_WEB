@@ -27,6 +27,7 @@
             <div class="glass-card p-4 h-100">
                 <h5 class="text-white mb-4"><i class="fas fa-ban me-2 text-danger"></i>Bloquer une IP</h5>
                 <form action="/client/firewall/block" method="POST">
+                    <?= Csrf::field() ?>
                     <div class="mb-3">
                         <label class="form-label text-secondary small text-uppercase">Adresse IP</label>
                         <input type="text" name="ip_address" class="form-control bg-dark text-white border-secondary" placeholder="ex: 1.2.3.4" required>
@@ -73,6 +74,7 @@
                                     <td class="small"><?= $b['expires_at'] ?></td>
                                     <td class="text-end">
                                         <form action="/client/firewall/unblock" method="POST" class="d-inline" onsubmit="return confirm('Débloquer cette IP ?');">
+                                            <?= Csrf::field() ?>
                                             <input type="hidden" name="id" value="<?= $b['id'] ?>">
                                             <button type="submit" class="btn btn-sm btn-outline-success"><i class="fas fa-unlock"></i></button>
                                         </form>
@@ -124,6 +126,7 @@
                                     <td class="small text-muted"><?= date('H:i:s', $l['first_request_at']) ?></td>
                                     <td class="text-end">
                                         <form action="/client/firewall/block" method="POST" class="d-inline">
+                                            <?= Csrf::field() ?>
                                             <input type="hidden" name="ip_address" value="<?= $l['ip_address'] ?>">
                                             <input type="hidden" name="domain" value="<?= $l['domain'] ?>">
                                             <button type="submit" class="btn btn-sm btn-outline-danger">Bloquer</button>
