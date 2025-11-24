@@ -79,6 +79,9 @@ $router->add('admin/edit-service', 'AdminController', 'editService'); // Formula
 $router->add('admin/save-service', 'AdminController', 'saveService'); // Sauvegarde modif
 // Gestion Client
 $router->add('client/cancel', 'ClientController', 'requestCancellation'); // Demande résiliation
+$router->add('client/firewall', 'ClientFirewallController', 'index');
+$router->add('client/firewall/add', 'ClientFirewallController', 'add');
+$router->add('client/firewall/delete', 'ClientFirewallController', 'delete');
 
 require_once __DIR__ . '/../app/Core/Settings.php';
 
