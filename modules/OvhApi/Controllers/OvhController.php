@@ -153,8 +153,8 @@ class OvhController {
 
             $firewallUrlBase = '/ip/' . urlencode($ip);
             if ($parentBlock) {
-                 // OVH API seems to prefer raw slashes for blocks in path segments
-                 $firewallUrlBase = '/ip/' . $parentBlock;
+                 // On encode le bloc car l'API attend un segment encodé (ex: 82.21.0.0%2F28)
+                 $firewallUrlBase = '/ip/' . urlencode($parentBlock);
             }
 
             try {
@@ -181,7 +181,7 @@ class OvhController {
             // Si bloc: /ip/{block}/reverse/{ip}
             $reverseUrlBase = '/ip/' . urlencode($ip);
             if ($parentBlock) {
-                $reverseUrlBase = '/ip/' . $parentBlock;
+                $reverseUrlBase = '/ip/' . urlencode($parentBlock);
             }
 
             try {
@@ -285,8 +285,14 @@ class OvhController {
     // --- ACTIONS: SERVER KVM ---
     public function kvmServer() {
         $this->checkAdmin();
-        $serviceName = $_POST['serviceName'];
+        $serviceName = $_POST['serviceName'] ?? '';
         $ovh = $this->getApiClient();
+
+        if (empty($serviceName)) {
+            $_SESSION['flash_error'] = "Erreur: Nom du serveur manquant.";
+            header('Location: /admin/ovh/servers');
+            exit;
+        }
 
         try {
             // D'abord on demande l'accès IPMI
@@ -339,8 +345,7 @@ class OvhController {
 
         $firewallUrlBase = '/ip/' . urlencode($ip);
         if ($block) {
-            $firewallUrlBase = '/ip/' . $block;
-            $firewallUrlBase = '/ip/' . $block;
+            $firewallUrlBase = '/ip/' . urlencode($block);
         }
 
         try {
@@ -377,6 +382,11 @@ class OvhController {
 
         $ovh = $this->getApiClient();
 
+        $firewallUrlBase = '/ip/' . urlencode($ip);
+        if ($block) {
+            $firewallUrlBase = '/ip/' . urlencode($block);
+        }
+
         $rule = [
             'sequence' => (int)$_POST['sequence'],
             'action'   => $_POST['action'],
@@ -390,11 +400,6 @@ class OvhController {
         if (in_array($_POST['protocol'], ['tcp', 'udp'])) {
              if (!empty($_POST['sourcePort'])) $rule['sourcePort'] = (int)$_POST['sourcePort'];
              if (!empty($_POST['destinationPort'])) $rule['destinationPort'] = (int)$_POST['destinationPort'];
-        }
-
-        $firewallUrlBase = '/ip/' . urlencode($ip);
-        if ($block) {
-            $firewallUrlBase = '/ip/' . urlencode($block);
         }
 
         try {
@@ -418,7 +423,7 @@ class OvhController {
 
         $firewallUrlBase = '/ip/' . urlencode($ip);
         if ($block) {
-            $firewallUrlBase = '/ip/' . $block;
+            $firewallUrlBase = '/ip/' . urlencode($block);
         }
 
         try {
@@ -442,7 +447,7 @@ class OvhController {
 
         $reverseUrlBase = '/ip/' . urlencode($ip);
         if ($block) {
-            $reverseUrlBase = '/ip/' . $block;
+            $reverseUrlBase = '/ip/' . urlencode($block);
         }
 
         try {
