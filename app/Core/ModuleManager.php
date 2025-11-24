@@ -3,6 +3,33 @@ class ModuleManager {
     
     // Charge uniquement les modules ACTIFS
     public static function boot() {
+        // Enregistrement de l'autoloader pour les modules
+        spl_autoload_register(function ($class) {
+            // Préfixe de namespace pour les modules
+            $prefix = 'Modules\\';
+
+            // Base directory pour les modules
+            $base_dir = __DIR__ . '/../../modules/';
+
+            // Vérifie si la classe utilise le préfixe
+            $len = strlen($prefix);
+            if (strncmp($prefix, $class, $len) !== 0) {
+                return;
+            }
+
+            // Récupère le nom relatif de la classe
+            $relative_class = substr($class, $len);
+
+            // Remplace le namespace prefix par le base directory, remplace les séparateurs de namespace
+            // par des séparateurs de dossier, et ajoute .php
+            $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+
+            // Si le fichier existe, on le charge
+            if (file_exists($file)) {
+                require $file;
+            }
+        });
+
         $moduleDir = __DIR__ . '/../../modules';
         if (!is_dir($moduleDir)) return;
 
@@ -11,7 +38,12 @@ class ModuleManager {
 
         // 2. Récupération des modules actifs
         $db = Database::connect();
-        $activeModules = $db->query("SELECT name FROM modules WHERE status = 'active'")->fetchAll(PDO::FETCH_COLUMN);
+        try {
+            $activeModules = $db->query("SELECT name FROM modules WHERE status = 'active'")->fetchAll(PDO::FETCH_COLUMN);
+        } catch (Exception $e) {
+            // Fallback si la table n'existe pas encore (premier run)
+            return;
+        }
 
         // 3. Chargement
         foreach ($activeModules as $moduleName) {
@@ -28,7 +60,17 @@ class ModuleManager {
         $db = Database::connect();
         
         // Récupérer les modules déjà connus en BDD
-        $existing = $db->query("SELECT name FROM modules")->fetchAll(PDO::FETCH_COLUMN);
+        try {
+            $existing = $db->query("SELECT name FROM modules")->fetchAll(PDO::FETCH_COLUMN);
+        } catch (Exception $e) {
+            // Création de la table si elle n'existe pas
+            $db->exec("CREATE TABLE IF NOT EXISTS modules (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) UNIQUE NOT NULL,
+                status VARCHAR(50) DEFAULT 'disabled'
+            )");
+            $existing = [];
+        }
 
         foreach ($folders as $folder) {
             if ($folder === '.' || $folder === '..') continue;
