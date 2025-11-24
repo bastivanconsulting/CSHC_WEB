@@ -57,7 +57,7 @@
                 
                 <!-- Bloc SSO -->
                 <?php 
-                    $sso_providers = Hook::call('get_sso_login_options');
+                    $sso_providers = Hook::filter('get_sso_login_options', []);
                     
                     if (!empty($sso_providers)): 
                 ?>
@@ -71,11 +71,11 @@
                     <?php foreach($sso_providers as $provider): ?>
                         <?php
                             // Déterminer le type de SSO pour l'icône/le style (simulé)
-                            $providerType = !empty($provider['metadata_url']) ? 'SAML' : 'OIDC';
+                            $providerType = $provider['sso_type'] ?? 'OIDC';
                             $icon = ($providerType === 'SAML') ? 'fas fa-id-card' : 'fas fa-fingerprint';
                         ?>
                         <!-- Utilisation de btn-outline-light pour la visibilité sur fond sombre -->
-                        <a href="/sso/auth/<?= urlencode($provider['name']) ?>" class="btn btn-outline-light w-100 mb-2 fw-bold d-flex align-items-center justify-content-center py-2">
+                        <a href="/auth/sso/login/<?= $provider['id'] ?>" class="btn btn-outline-light w-100 mb-2 fw-bold d-flex align-items-center justify-content-center py-2">
                             <i class="<?= $icon ?> me-2"></i> 
                             SSO via <?= htmlspecialchars($provider['name']) ?>
                         </a>
