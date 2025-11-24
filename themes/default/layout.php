@@ -43,6 +43,11 @@
                                 <i class="fas fa-user-circle me-1"></i> Espace Client
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/client/firewall">
+                                <i class="fas fa-shield-virus me-1"></i> WAF
+                            </a>
+                        </li>
                         <?php if($_SESSION['user']['role'] === 'admin'): ?>
                             <li class="nav-item"><a class="nav-link text-warning" href="/admin"><i class="fas fa-shield-halved"></i> Admin</a></li>
                         <?php endif; ?>
