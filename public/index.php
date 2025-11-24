@@ -35,7 +35,7 @@ if (Env::get('MAINTENANCE_MODE') === true) {
 
     if (!$isAdmin && !isset($_GET['bypass_maintenance'])) { // Simple bypass for testing
          http_response_code(503);
-         View::render('maintenance', [], 'front');
+         View::render('maintenance', [], 'front', false);
          exit;
     }
 }
