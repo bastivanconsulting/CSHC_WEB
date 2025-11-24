@@ -162,6 +162,30 @@ if (isset($_GET['firewall_js'])) {
     }
 
     function showChallenge() {
+        var html = \`
+        <div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.98);backdrop-filter:blur(20px);z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Segoe UI', sans-serif;">
+            <div style="background:rgba(30, 41, 59, 0.4);border:1px solid rgba(59, 130, 246, 0.3);padding:3rem;border-radius:1rem;text-align:center;max-width:450px;width:90%;box-shadow:0 0 50px rgba(37, 99, 235, 0.1);">
+                <div style="margin-bottom:2rem;">
+                    <svg class="cshc-spin" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+                <h2 style="color:#f8fafc;margin-bottom:0.5rem;font-size:1.75rem;font-weight:700;">Security Check</h2>
+                <p style="color:#94a3b8;margin-bottom:2rem;line-height:1.6;">We are verifying your browser to ensure you are human. This will only take a moment.</p>
+
+                <div id="cshc-spinner" style="display:inline-block;width:30px;height:30px;border:3px solid rgba(37, 99, 235, 0.3);border-radius:50%;border-top-color:#2563eb;animation:cshc-spin 1s linear infinite;"></div>
+
+                <button id="cshc-solve-btn" style="display:none;background:#2563eb;color:white;border:none;padding:0.75rem 2rem;border-radius:0.5rem;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:1rem;width:100%;">
+                    Proceed to Site
+                </button>
+            </div>
+            <div style="margin-top:2rem;color:#475569;font-size:0.8rem;">
+                Protected by CSHC Firewall
+            </div>
+            <style>
+                @keyframes cshc-spin { to { transform: rotate(360deg); } }
+                #cshc-solve-btn:hover { background: #1d4ed8; }
+            </style>
+        </div>
+        \`;
         var html = '<div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.95);backdrop-filter:blur(10px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:\'Segoe UI\', sans-serif;">' +
             '<div style="background:rgba(30, 41, 59, 0.6);border:1px solid rgba(255,255,255,0.1);padding:3rem;border-radius:1rem;text-align:center;max-width:400px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">' +
                 '<div style="margin-bottom:1.5rem;">' +
@@ -177,15 +201,10 @@ if (isset($_GET['firewall_js'])) {
         div.innerHTML = html;
         document.body.appendChild(div);
 
-        document.getElementById('cshc-solve-btn').onclick = function() {
-            this.innerHTML = 'Verifying...';
-            this.style.opacity = '0.7';
-            this.disabled = true;
-
-            setTimeout(function(){
-                verifyChallenge();
-            }, 1500);
-        };
+        // Auto-start verification process
+        setTimeout(function(){
+            verifyChallenge();
+        }, 1500);
     }
 
     function verifyChallenge() {
@@ -197,10 +216,19 @@ if (isset($_GET['firewall_js'])) {
                 var res = JSON.parse(xhr.responseText);
                 if(res.status === 'success') {
                     setToken(res.token);
-                    document.getElementById('cshc-challenge-overlay').remove();
+                    var overlay = document.getElementById('cshc-challenge-overlay');
+                    if(overlay) {
+                        overlay.style.transition = "opacity 0.5s ease";
+                        overlay.style.opacity = "0";
+                        setTimeout(function(){ overlay.remove(); }, 500);
+                    }
                 } else {
-                    alert('Verification failed. Please try again.');
-                    location.reload();
+                    // If auto-verify fails, show button
+                    document.getElementById('cshc-spinner').style.display = 'none';
+                    var btn = document.getElementById('cshc-solve-btn');
+                    btn.style.display = 'inline-block';
+                    btn.innerText = 'Retry Verification';
+                    btn.onclick = function() { location.reload(); };
                 }
             }
         };
@@ -215,29 +243,80 @@ JS;
 
 // 4. LOGIQUE WAF INTERNE & HELPER FUNCTIONS
 
+// --- COMODO / OWASP-INSPIRED PATTERNS ---
+function firewall_get_comodo_patterns() {
+    return [
+        // 1. SQL Injection (SQLi)
+        // Basic keywords
+        '/\b(union|select|insert|update|delete|drop|alter)\b.*\b(from|into|table|database|index|view)\b/i',
+        '/union\s+(all\s+)?select/i',
+        '/information_schema/i',
+        // Tautologies
+        '/\s+or\s+[\'"]?1[\'"]?\s*=\s*[\'"]?1/i',
+        '/\s+or\s+true\s*=\s*true/i',
+        // Comment injection
+        '/\/\*.*\*\//U',
+        '/--\s*$/',
+        // Hex/Char evasion
+        '/0x[0-9a-f]+/i',
+        '/char\s*\(/i',
+        // Stacked queries
+        '/;\s*(select|insert|update|delete|drop)/i',
+        // Microsoft SQL specifics
+        '/exec\s+xp_/i',
+        '/waitfor\s+delay/i',
+
+        // 2. Cross-Site Scripting (XSS)
+        // Script tags
+        '/<script[\s>]/i',
+        '/<\/script>/i',
+        // Event handlers
+        '/on(load|error|click|mouseover|submit|reset|focus|blur)\s*=/i',
+        // Javascript pseudo-protocol
+        '/javascript\s*:/i',
+        '/vbscript\s*:/i',
+        '/data\s*:\s*text\/html/i',
+        // SVG/XML vectors
+        '/<!ENTITY/i',
+        '/<!DOCTYPE/i',
+
+        // 3. Local File Inclusion (LFI) & Path Traversal
+        '/\.\.\//', // ../
+        '/\.\.\\\\/', // ..\
+        '/etc\/passwd/i',
+        '/windows\/win.ini/i',
+        '/boot\.ini/i',
+        // Wrappers
+        '/php:\/\//i',
+        '/file:\/\//i',
+        '/expect:\/\//i',
+
+        // 4. Remote Code Execution (RCE)
+        // System commands
+        '/system\s*\(/i',
+        '/exec\s*\(/i',
+        '/shell_exec\s*\(/i',
+        '/passthru\s*\(/i',
+        '/proc_open\s*\(/i',
+        '/popen\s*\(/i',
+        // Backticks
+        '/`.*`/',
+
+        // 5. User-Agent Blocking (Common Scanners)
+        '/sqlmap/i',
+        '/nikto/i',
+        '/nmap/i',
+        '/wpscan/i',
+        '/python-requests/i',
+        '/libwww-perl/i',
+        '/curl/i',
+        '/wget/i'
+    ];
+}
+
 // --- INTELLIGENT WAF RULES ---
 function firewall_analyze_payload() {
-    // Basic OWASP-like signatures (SQLi, XSS, Path Traversal)
-    $patterns = [
-        // SQL Injection
-        '/union\s+select/i',
-        '/union\s+all\s+select/i',
-        '/information_schema/i',
-        '/waitfor\s+delay/i',
-        '/exec\s+\(/i',
-        '/concat\s*\(/i',
-        // XSS
-        '/<script/i',
-        '/javascript:/i',
-        '/onerror\s*=/i',
-        '/onload\s*=/i',
-        // Path Traversal
-        '/\.\.\//',
-        '/\/etc\/passwd/',
-        '/\/bin\/sh/',
-        // Shell Injection
-        '/;.*(ls|cat|wget|curl|nc)/i'
-    ];
+    $patterns = firewall_get_comodo_patterns();
 
     $check = null;
     $check = function($data) use ($patterns, &$check) {
@@ -246,16 +325,26 @@ function firewall_analyze_payload() {
                 if ($check($value)) return true;
             }
         } else {
+            // Normalisation pour éviter les évasions simples
+            $normalized = urldecode($data);
             foreach ($patterns as $pattern) {
-                if (preg_match($pattern, $data)) return true;
+                if (preg_match($pattern, $data) || preg_match($pattern, $normalized)) return true;
             }
         }
         return false;
     };
 
+    // Check REQUEST, POST, COOKIE, and UA
     if ($check($_GET) || $check($_POST) || $check($_COOKIE)) {
         return true;
     }
+
+    // Check User-Agent specifically
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $ua)) return true;
+    }
+
     return false;
 }
 // -----------------------------
@@ -285,8 +374,6 @@ function firewall_api_check() {
     }
 
     // [VERIFICATION] Si pas vérifié, on bloque ou on met en warning?
-    // Le client dit "Je pense aussi qu'il faut faire une validation".
-    // Pour l'instant si pas vérifié, on peut bloquer.
     if ($site['verified'] == 0) {
         echo json_encode(['status' => 'blocked', 'reason' => 'Domain Verification Pending']);
         return;
@@ -295,10 +382,18 @@ function firewall_api_check() {
     $ip = firewall_get_ip();
 
     // [INTELLIGENT WAF] Analyze Payload
+    // Si mode = 'monitor', on logue seulement, on ne bloque pas pour le WAF
+    // MAIS pour l'instant l'architecture banne direct.
+    // On va modifier pour supporter 'monitor'
     if (firewall_analyze_payload()) {
-        firewall_ban_ip($ip, "Malicious Payload Detected (WAF)", 86400, $origin);
-        echo json_encode(['status' => 'blocked', 'reason' => 'Malicious Payload']);
-        return;
+        $reason = "Malicious Payload (Comodo WAF)";
+        firewall_log_traffic($ip, $origin, 'waf_detect'); // Log detection
+
+        if ($site['mode'] !== 'monitor') {
+             firewall_ban_ip($ip, $reason, 86400, $origin);
+             echo json_encode(['status' => 'blocked', 'reason' => 'Malicious Payload']);
+             return;
+        }
     }
 
     // 1. Check Bans
@@ -322,7 +417,7 @@ function firewall_api_check() {
     }
 
     // 3. Enforce Limits
-    firewall_enforce_limit($ip, $site['req_limit'], $site['req_window'], $site['ban_duration'], $origin);
+    firewall_enforce_limit($ip, $site['req_limit'], $site['req_window'], $site['ban_duration'], $origin, $site['mode']);
 
     echo json_encode(['status' => 'allowed']);
 }
@@ -338,10 +433,16 @@ function firewall_api_verify() {
     echo json_encode(['status' => 'success', 'token' => $token]);
 }
 
-function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $domain = 'local') {
+function firewall_log_traffic($ip, $domain, $type = 'normal') {
+    // Optional: Log purely for monitoring if needed (not fully implemented in DB schema yet except traffic count)
+    // Could extend firewall_traffic or use audit_logs
+}
+
+function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $domain = 'local', $mode = 'active') {
     $db = Database::connect();
     $now = time();
 
+    // Cleanup old traffic occasionally
     if (rand(1, 100) === 1) {
         $db->exec("DELETE FROM firewall_traffic WHERE first_request_at < " . ($now - $window));
     }
@@ -352,18 +453,23 @@ function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $doma
 
     if ($traffic) {
         if ($now - $traffic['first_request_at'] > $window) {
+            // Reset window
             $upd = $db->prepare("UPDATE firewall_traffic SET request_count = 1, first_request_at = ? WHERE ip_address = ? AND domain = ?");
             $upd->execute([$now, $ip, $domain]);
         } else {
+            // Increment
             if ($traffic['request_count'] >= $limit) {
-                firewall_ban_ip($ip, "Rate Limit Exceeded on $domain", $banDuration, $domain);
+                // Limit exceeded
+                if ($mode !== 'monitor') {
+                    firewall_ban_ip($ip, "Rate Limit Exceeded on $domain", $banDuration, $domain);
 
-                if ($domain === 'local') {
-                    firewall_render_denied($ip, "Rate Limit Exceeded");
-                    exit;
-                } else {
-                    echo json_encode(['status' => 'blocked', 'reason' => "Rate Limit Exceeded"]);
-                    exit;
+                    if ($domain === 'local') {
+                        firewall_render_denied($ip, "Rate Limit Exceeded");
+                        exit;
+                    } else {
+                        echo json_encode(['status' => 'blocked', 'reason' => "Rate Limit Exceeded"]);
+                        exit;
+                    }
                 }
             }
             $upd = $db->prepare("UPDATE firewall_traffic SET request_count = request_count + 1 WHERE ip_address = ? AND domain = ?");
@@ -428,6 +534,7 @@ function firewall_render_denied($ip, $reason) {
 if (!isset($_GET['firewall_api']) && !isset($_GET['firewall_js'])) {
     // Intelligent WAF for Local
     if (firewall_analyze_payload()) {
+        // En local, on est toujours en mode 'active' (blocking)
         firewall_ban_ip(firewall_get_ip(), "Malicious Payload (Local)", 86400, 'local');
         firewall_render_denied(firewall_get_ip(), "Malicious Payload");
         exit;
