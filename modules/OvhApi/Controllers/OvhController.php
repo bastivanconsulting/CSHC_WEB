@@ -149,7 +149,8 @@ class OvhController {
 
             $firewallUrlBase = '/ip/' . urlencode($ip);
             if ($parentBlock) {
-                 $firewallUrlBase = '/ip/' . urlencode($parentBlock);
+                 // OVH API seems to prefer raw slashes for blocks in path segments
+                 $firewallUrlBase = '/ip/' . $parentBlock;
             }
 
             try {
@@ -175,7 +176,7 @@ class OvhController {
             // Si bloc: /ip/{block}/reverse/{ip}
             $reverseUrlBase = '/ip/' . urlencode($ip);
             if ($parentBlock) {
-                $reverseUrlBase = '/ip/' . urlencode($parentBlock);
+                $reverseUrlBase = '/ip/' . $parentBlock;
             }
 
             try {
@@ -253,7 +254,8 @@ class OvhController {
 
         $firewallUrlBase = '/ip/' . urlencode($ip);
         if ($block) {
-            $firewallUrlBase = '/ip/' . urlencode($block);
+            $firewallUrlBase = '/ip/' . $block;
+            $firewallUrlBase = '/ip/' . $block;
         }
 
         try {
@@ -331,7 +333,7 @@ class OvhController {
 
         $firewallUrlBase = '/ip/' . urlencode($ip);
         if ($block) {
-            $firewallUrlBase = '/ip/' . urlencode($block);
+            $firewallUrlBase = '/ip/' . $block;
         }
 
         try {
@@ -355,7 +357,7 @@ class OvhController {
 
         $reverseUrlBase = '/ip/' . urlencode($ip);
         if ($block) {
-            $reverseUrlBase = '/ip/' . urlencode($block);
+            $reverseUrlBase = '/ip/' . $block;
         }
 
         try {
