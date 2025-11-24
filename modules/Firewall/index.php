@@ -116,10 +116,15 @@ if (isset($_GET['firewall_js'])) {
     header("Access-Control-Allow-Origin: *");
     header('Content-Type: application/javascript');
     $apiUrl = (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]/?firewall_api";
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+    $rayId = substr(md5(uniqid($ip, true)), 0, 16);
+
     echo <<<JS
 (function(){
     var API_URL = "$apiUrl";
     var domain = window.location.hostname;
+    var clientIp = "$ip";
+    var rayId = "$rayId";
 
     // Helper: Get Token
     function getToken() {
@@ -174,27 +179,49 @@ if (isset($_GET['firewall_js'])) {
 
     function showChallenge() {
         var html = `
-        <div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.98);backdrop-filter:blur(20px);z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Segoe UI', sans-serif;">
-            <div style="background:rgba(30, 41, 59, 0.4);border:1px solid rgba(59, 130, 246, 0.3);padding:3rem;border-radius:1rem;text-align:center;max-width:450px;width:90%;box-shadow:0 0 50px rgba(37, 99, 235, 0.1);">
-                <div style="margin-bottom:2rem;">
-                    <svg class="cshc-spin" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                </div>
-                <h2 style="color:#f8fafc;margin-bottom:0.5rem;font-size:1.75rem;font-weight:700;">Security Check</h2>
-                <p style="color:#94a3b8;margin-bottom:2rem;line-height:1.6;">We are verifying your browser to ensure you are human. This will only take a moment.</p>
-
-                <div id="cshc-spinner" style="display:inline-block;width:30px;height:30px;border:3px solid rgba(37, 99, 235, 0.3);border-radius:50%;border-top-color:#2563eb;animation:cshc-spin 1s linear infinite;"></div>
-
-                <button id="cshc-solve-btn" style="display:none;background:#2563eb;color:white;border:none;padding:0.75rem 2rem;border-radius:0.5rem;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:1rem;width:100%;">
-                    Proceed to Site
-                </button>
-            </div>
-            <div style="margin-top:2rem;color:#475569;font-size:0.8rem;">
-                Protected by CSHC Firewall
-            </div>
+        <div id="cshc-challenge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(2, 6, 23, 0.98);backdrop-filter:blur(15px);z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Plus Jakarta Sans', 'Segoe UI', sans-serif;">
             <style>
-                @keyframes cshc-spin { to { transform: rotate(360deg); } }
-                #cshc-solve-btn:hover { background: #1d4ed8; }
+                @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+                @keyframes cshc-pulse { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
+                @keyframes cshc-progress { 0% { width: 0%; } 100% { width: 100%; } }
+                @keyframes cshc-fade-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
             </style>
+
+            <div style="background:rgba(30, 41, 59, 0.6);border:1px solid rgba(255, 255, 255, 0.1);padding:4rem;border-radius:1.5rem;text-align:center;max-width:500px;width:90%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);backdrop-filter:blur(10px);animation:cshc-fade-up 0.8s ease-out;">
+
+                <div style="margin-bottom:2.5rem;position:relative;display:inline-block;">
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);width:80px;height:80px;background:#2563eb;border-radius:50%;opacity:0.2;animation:cshc-pulse 2s infinite;"></div>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:relative;z-index:2;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+
+                <h1 style="color:#f8fafc;margin:0 0 1rem 0;font-size:2rem;font-weight:700;letter-spacing:-0.025em;">Security Check</h1>
+
+                <div style="text-align:left;background:rgba(15, 23, 42, 0.5);border-radius:0.75rem;padding:1.5rem;margin-bottom:2rem;border:1px solid rgba(255,255,255,0.05);">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;color:#94a3b8;font-size:0.875rem;">
+                        <span>Ray ID:</span>
+                        <span style="color:#e2e8f0;font-family:monospace;">` + rayId + `</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;color:#94a3b8;font-size:0.875rem;">
+                        <span>Your IP:</span>
+                        <span style="color:#e2e8f0;font-family:monospace;">` + clientIp + `</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:2rem;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;color:#cbd5e1;font-size:0.875rem;font-weight:600;">
+                        <span id="cshc-status">Analyzing browser signals...</span>
+                        <span id="cshc-percent">0%</span>
+                    </div>
+                    <div style="height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">
+                        <div id="cshc-bar" style="height:100%;background:#3b82f6;width:0%;transition:width 0.5s ease;"></div>
+                    </div>
+                </div>
+
+                <p style="color:#64748b;font-size:0.75rem;margin-top:2rem;border-top:1px solid rgba(255,255,255,0.1);padding-top:1.5rem;">
+                    CoreSecure Hybrid Connect (CSHC)<br>
+                    <span style="color:#475569;">by Bastivan Consulting</span>
+                </p>
+            </div>
         </div>
         `;
 
@@ -202,10 +229,31 @@ if (isset($_GET['firewall_js'])) {
         div.innerHTML = html;
         document.body.appendChild(div);
 
-        // Auto-start verification process
-        setTimeout(function(){
-            verifyChallenge();
-        }, 1500);
+        // Animation sequence > 5 seconds
+        var bar = document.getElementById('cshc-bar');
+        var status = document.getElementById('cshc-status');
+        var percent = document.getElementById('cshc-percent');
+        var progress = 0;
+
+        var interval = setInterval(function() {
+            progress += Math.random() * 5;
+            if (progress > 100) progress = 100;
+
+            bar.style.width = progress + '%';
+            percent.innerText = Math.floor(progress) + '%';
+
+            if (progress < 30) status.innerText = "Analyzing browser signals...";
+            else if (progress < 60) status.innerText = "Verifying network reputation...";
+            else if (progress < 90) status.innerText = "Establishing secure connection...";
+            else status.innerText = "Access granted.";
+
+            if (progress >= 100) {
+                clearInterval(interval);
+                setTimeout(function() {
+                    verifyChallenge();
+                }, 500);
+            }
+        }, 300); // 300ms * ~25 steps = ~7.5 seconds
     }
 
     function verifyChallenge() {
