@@ -2,176 +2,135 @@
 GUIDE DE DÉVELOPPEMENT DES MODULES CSHC
 
 Ce système modulaire permet d'étendre les fonctionnalités de CSHC (CoreSecure
-Hybrid Connect) sans modifier le cœur de l'application.
+Hybrid Connect) en utilisant une architecture MVC (Modèle-Vue-Contrôleur)
+moderne et robuste.
 
 STRUCTURE D'UN MODULE
 
-Chaque module est un dossier situé dans /modules/. Il doit contenir au minimum
-un fichier index.php.
+Chaque module est un dossier situé dans /modules/.
+Il est recommandé de suivre la structure MVC suivante :
 
-Exemple de structure :
 /modules
 └── MonSuperModule/
-├── index.php       <-- Point d'entrée obligatoire
-├── style.css       (optionnel)
-└── script.js       (optionnel)
+    ├── Controllers/
+    │   └── MonController.php
+    ├── Views/
+    │   └── index.php
+    ├── index.php       <-- Point d'entrée obligatoire
+    └── style.css       (optionnel)
 
 Pour que le module soit chargé, il doit être ACTIVÉ dans le panneau
 d'administration (/admin/modules).
 
-LE SYSTÈME DE HOOKS
+LE SYSTÈME DE HOOKS ET DE ROUTAGE
 
-L'interaction avec le cœur se fait via la classe Hook. Il existe deux méthodes :
+L'interaction avec le cœur se fait via la classe Hook dans le fichier `index.php` du module.
 
-A. Hook::listen('nom_evenement', function($args) { ... })
+A. Enregistrement des Routes (Controller)
 
-Utilisé pour injecter du HTML, du CSS ou exécuter une action.
+Pour ajouter une nouvelle page, utilisez le hook `register_routes`.
+Le système supporte désormais l'appel direct aux classes de contrôleurs (autoloadées).
 
-Exemple : Ajouter un bouton, envoyer un mail.
+Exemple :
 
-B. Hook::filter('nom_filtre', function($valeur, $args) { ... })
+```php
+// modules/MonModule/index.php
+use Modules\MonModule\Controllers\MonController;
 
-Utilisé pour modifier une donnée avant qu'elle ne soit utilisée.
-
-Exemple : Changer le prix d'un service, ajouter une route.
-
-LISTE COMPLÈTE DES HOOKS DISPONIBLES
-
---- DESIGN GLOBAL (Layout) ---
-[global_head] (Listen)
-Description : Injecter du CSS ou des balises <meta> dans le <head>.
-
-[navbar_items] (Listen)
-Description : Ajouter des <li><a href="...">...</a></li> dans le menu principal.
-
-[global_alert_banner] (Listen)
-Description : Afficher une alerte tout en haut de la page (ex: Maintenance).
-
-[footer_content] (Listen)
-Description : Ajouter du contenu dans le pied de page.
-
-[global_scripts] (Listen)
-Description : Injecter du Javascript <script> avant la fermeture du </body>.
-
---- PAGE D'ACCUEIL ---
-[before_home_render] (Listen)
-Description : Se déclenche avant l'affichage (utile pour rediriger ou loguer).
-
-[home_after_hero] (Listen)
-Description : Zone HTML juste après la bannière principale.
-
-[home_bottom] (Listen)
-Description : Zone HTML tout en bas de l'accueil.
-
---- ESPACE CLIENT (Dashboard) ---
-[client_dashboard_data] (Filter)
-Description : Modifier la liste des services $services avant affichage.
-
-[client_dashboard_top] (Listen)
-Description : Zone HTML haut de page (bannières promo).
-
-[client_dashboard_widgets] (Listen)
-Description : Zone HTML avant la liste des services (graphiques, stats).
-
-[client_dashboard_badges] (Listen)
-Description : Ajouter un badge à côté du titre du service (Reçoit $args['service']).
-
-[client_dashboard_service_details] (Listen)
-Description : Afficher des infos techniques (SIM, VLAN) dans la carte service.
-
-[client_dashboard_bottom] (Listen)
-Description : Zone HTML bas de page.
-
-[after_service_cancellation] (Listen)
-Description : Quand un client demande une résiliation (Reçoit service, user, date).
-
---- AUTHENTIFICATION & SÉCURITÉ ---
-[before_login_attempt] (Listen)
-Description : Avant le traitement du formulaire de login.
-
-[user_login_success] (Listen)
-Description : Quand un utilisateur se connecte (Reçoit $args['user']).
-
-[user_login_failed] (Listen)
-Description : Quand le mot de passe est faux (Reçoit $args['email']).
-
-[user_logout] (Listen)
-Description : Quand l'utilisateur se déconnecte.
-
---- ADMINISTRATION & SERVICES ---
-[register_service_type] (Listen)
-Description : Ajouter une <option> dans le sélecteur de type de service.
-
-[admin_service_form_fields] (Listen)
-Description : Ajouter des champs HTML dans le formulaire de création.
-
-[save_service_data] (Filter) *** CRITIQUE ***
-Description : Intercepte les données $_POST pour les sauvegarder dans le JSON.
-
-[admin_service_list_details] (Listen)
-Description : Afficher des infos dans la colonne "Prix / Eng." du tableau admin.
-
-[admin_service_edit_fields] (Listen)
-Description : Ajouter les champs pré-remplis dans le formulaire d'édition.
-
-[admin_user_actions] (Listen)
-Description : Ajouter des boutons d'action sur la liste des utilisateurs.
-
---- ROUTAGE ---
-[register_routes] (Filter)
-Description : Ajouter des URL personnalisées (ex: /mon-module/page).
-
-EXEMPLES DE CODE (COPIER-COLLER)
-
-EXEMPLE 1 : CRÉER UN NOUVEAU TYPE DE SERVICE (ex: "Offre Satellite")
-
-<?php
-// modules/Satellite/index.php
-
-// 1. Ajouter l'option dans le menu déroulant
-Hook::listen('register_service_type', function() {
-return '<option value="satellite">Internet par Satellite</option>';
+Hook::listen('register_routes', function($routes) {
+    // URL: /ma-page -> Appelle MonController::maMethode()
+    $routes['ma-page'] = [
+        'controller' => MonController::class,
+        'method' => 'maMethode'
+    ];
+    return $routes;
 });
+```
 
-// 2. Afficher les champs spécifiques (ID Antenne)
-Hook::listen('admin_service_form_fields', function() {
-return "
-<div class='module-field' data-type='satellite' style='display:none;'>
-<label>ID Antenne</label>
-<input type='text' name='sat_id' class='form-control'>
-</div>
-<script>
-document.getElementById('serviceTypeSelector').addEventListener('change', function(e) {
-// Logique JS pour afficher/masquer le champ...
-});
-</script>
-";
-});
+B. Le Contrôleur (Namespace `Modules\NomDuModule\Controllers`)
 
-// 3. Sauvegarder les données
-Hook::listen('save_service_data', function($data, $args) {
-if ($args['post']['type'] === 'satellite') {
-$data['sat_id'] = $args['post']['sat_id'];
+Le contrôleur contient la logique métier. Grâce à l'autoloader PSR-4,
+les classes sont chargées automatiquement.
+
+Exemple :
+
+```php
+// modules/MonModule/Controllers/MonController.php
+namespace Modules\MonModule\Controllers;
+
+use View;
+
+class MonController {
+    public function maMethode() {
+        // Logique...
+        $data = ['titre' => 'Bienvenue'];
+
+        // Affiche la vue située dans modules/MonModule/Views/index.php
+        // Plus besoin de spécifier le chemin complet !
+        View::render('index', $data);
+    }
 }
-return $data;
-});
+```
 
-// 4. Afficher côté client
-Hook::listen('client_dashboard_service_details', function($args) {
-$json = json_decode($args['service']['custom_fields'], true);
-if ($args['service']['type'] === 'satellite') {
-return "Antenne : " . $json['sat_id'];
-}
-});
-?>
+C. Les Vues (Views)
 
-EXEMPLE 2 : ENVOYER UN MAIL LORS D'UNE CONNEXION
+Placez vos fichiers templates dans le dossier `Views` de votre module.
+Le système de vue détecte automatiquement le dossier du module appelant.
 
+AUTRES HOOKS UTILES
+
+Hook::listen('nom_evenement', function($args) { ... })
+Utilisé pour injecter du HTML ou exécuter une action.
+
+Hook::filter('nom_filtre', function($valeur, $args) { ... })
+Utilisé pour modifier une donnée.
+
+LISTE DES HOOKS PRINCIPAUX
+
+--- DESIGN GLOBAL ---
+[global_head] : Injecter du CSS/Meta dans <head>.
+[navbar_items] : Ajouter des liens dans le menu.
+[footer_content] : Ajouter du contenu dans le footer.
+
+--- ESPACE CLIENT ---
+[client_dashboard_widgets] : Ajouter des widgets sur le tableau de bord.
+[client_dashboard_service_details] : Afficher des détails techniques sur une carte service.
+
+--- ADMINISTRATION ---
+[admin_service_form_fields] : Champs additionnels formulaire création service.
+[admin_service_edit_fields] : Champs additionnels formulaire édition service.
+[save_service_data] (Filter) : Intercepter et sauvegarder les données custom.
+
+EXEMPLE COMPLET : MODULE "HELLO WORLD"
+
+1. Fichier: modules/Hello/index.php
+```php
 <?php
-// modules/AlertLogin/index.php
+use Modules\Hello\Controllers\HelloController;
 
-Hook::listen('user_login_success', function($args) {
-$email = $args['user']['email'];
-mail('admin@cshc.local', 'Nouvelle connexion', "L'utilisateur $email vient de se connecter.");
+Hook::listen('register_routes', function($routes) {
+    $routes['hello'] = [
+        'controller' => HelloController::class,
+        'method' => 'world'
+    ];
+    return $routes;
 });
-?>
+```
+
+2. Fichier: modules/Hello/Controllers/HelloController.php
+```php
+<?php
+namespace Modules\Hello\Controllers;
+use View;
+
+class HelloController {
+    public function world() {
+        View::render('hello_view', [], 'front');
+    }
+}
+```
+
+3. Fichier: modules/Hello/Views/hello_view.php
+```html
+<h1>Hello World from Module!</h1>
+```
