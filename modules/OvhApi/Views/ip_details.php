@@ -41,6 +41,11 @@
             <div class="card glass-card border-0 text-white mb-4">
                 <div class="card-header bg-transparent border-secondary fw-bold text-uppercase small">Reverse DNS (PTR)</div>
                 <div class="card-body">
+                    <?php if (isset($ptrError) && $ptrError): ?>
+                        <div class="alert alert-warning small border-0 shadow-sm p-2 mb-3">
+                            <i class="fas fa-exclamation-triangle me-1"></i> <?= htmlspecialchars($ptrError) ?>
+                        </div>
+                    <?php endif; ?>
                     <form action="/admin/ovh/action/ptr" method="POST">
                         <input type="hidden" name="ip" value="<?= htmlspecialchars($ip) ?>">
                         <?php if(!empty($parentBlock)): ?>
@@ -66,6 +71,11 @@
                     <?php endif; ?>
                 </div>
                 <div class="card-body text-center py-4">
+                    <?php if (isset($firewallError) && $firewallError): ?>
+                        <div class="alert alert-warning small border-0 shadow-sm p-2 mb-3 text-start">
+                            <i class="fas fa-exclamation-triangle me-1"></i> <?= htmlspecialchars($firewallError) ?>
+                        </div>
+                    <?php endif; ?>
                     <form action="/admin/ovh/action/firewall/toggle" method="POST">
                         <input type="hidden" name="ip" value="<?= htmlspecialchars($ip) ?>">
                         <?php if(!empty($parentBlock)): ?>
