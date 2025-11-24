@@ -1,7 +1,7 @@
 <?php
 /**
  * Module: Firewall (WAF & Rate Limiting)
- * Description: Bloque les IP malveillantes et limite le taux de requêtes.
+ * Description: Bloque les IP malveillantes, limite le taux de requêtes, et protège les sites externes via API.
  */
 
 $db = Database::connect();
@@ -27,32 +27,175 @@ try {
     $db->query("SELECT 1 FROM firewall_traffic LIMIT 1");
 } catch (Exception $e) {
     // Création table traffic (Rate Limiting)
-    // On utilise MEMORY si possible pour la perf, sinon InnoDB
     try {
         $db->exec("CREATE TABLE IF NOT EXISTS firewall_traffic (
             ip_address VARCHAR(45) NOT NULL,
             request_count INT DEFAULT 1,
             first_request_at INT NOT NULL,
-            PRIMARY KEY (ip_address)
+            domain VARCHAR(100) DEFAULT 'local',
+            PRIMARY KEY (ip_address, domain)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        // Note: Modified PK to include domain for multi-site separation
+    } catch (Exception $ex) {
+         // Migration for existing table without domain support if needed?
+         // For now, assuming fresh or manually handled if key conflict.
+         // Let's not break existing logic if column missing.
+         try {
+             $db->exec("ALTER TABLE firewall_traffic ADD COLUMN domain VARCHAR(100) DEFAULT 'local'");
+             $db->exec("ALTER TABLE firewall_traffic DROP PRIMARY KEY, ADD PRIMARY KEY (ip_address, domain)");
+         } catch(Exception $e2) {}
+    }
+}
+
+// Creation table firewall_sites
+try {
+    $db->query("SELECT 1 FROM firewall_sites LIMIT 1");
+} catch (Exception $e) {
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS firewall_sites (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            domain VARCHAR(255) NOT NULL,
+            req_limit INT DEFAULT 100,
+            req_window INT DEFAULT 60,
+            ban_duration INT DEFAULT 3600,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(domain)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     } catch (Exception $ex) {}
 }
 
-// 2. LOGIQUE WAF
+// 2. API LOGIC (Pour sites externes)
+if (isset($_GET['firewall_api']) && $_GET['firewall_api'] === 'check') {
+    firewall_api_check();
+    exit;
+}
 
+// 3. JS SERVING
+if (isset($_GET['firewall_js'])) {
+    header('Content-Type: application/javascript');
+    $apiUrl = (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]/?firewall_api=check";
+    echo <<<JS
+(function(){
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "$apiUrl", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            var res = JSON.parse(xhr.responseText);
+            if(res.status === 'blocked') {
+                document.body.innerHTML = '<div style="background:#020617;color:white;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;"><h1>Access Denied by CSHC WAF</h1></div>';
+                // Ou redirection: window.location.href = res.redirect_url;
+            }
+        }
+    };
+    xhr.send("origin=" + encodeURIComponent(window.location.hostname));
+})();
+JS;
+    exit;
+}
+
+// 4. LOGIQUE WAF INTERNE
 function firewall_get_ip() {
-    // Attention aux proxies (X-Forwarded-For), à sécuriser selon l'infra.
-    // Ici on prend REMOTE_ADDR par défaut pour la sécurité (difficile à spoofer en TCP).
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
 
+function firewall_api_check() {
+    // CORS
+    header("Access-Control-Allow-Origin: *");
+    header("Content-Type: application/json");
+
+    $origin = $_POST['origin'] ?? '';
+    // Nettoyage sommaire de l'origine
+    $origin = parse_url($origin, PHP_URL_HOST) ?: $origin; // Si http://...
+    if (!$origin) $origin = 'unknown';
+
+    $db = Database::connect();
+
+    // Vérifier si le site est autorisé
+    $stmt = $db->prepare("SELECT * FROM firewall_sites WHERE domain = ?");
+    $stmt->execute([$origin]);
+    $site = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$site) {
+        // Site non géré : on laisse passer ou on bloque ?
+        // Par défaut on laisse passer mais sans protection
+        echo json_encode(['status' => 'allowed', 'msg' => 'Site not protected']);
+        return;
+    }
+
+    $ip = firewall_get_ip();
+
+    // Check Global Ban
+    $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (expires_at IS NULL OR expires_at > NOW())");
+    $stmt->execute([$ip]);
+    $ban = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($ban) {
+        echo json_encode(['status' => 'blocked', 'reason' => $ban['reason']]);
+        return;
+    }
+
+    // Rate Limit specific to site
+    $limit = $site['req_limit'];
+    $window = $site['req_window'];
+    $banDuration = $site['ban_duration'];
+
+    firewall_enforce_limit($ip, $limit, $window, $banDuration, $origin);
+
+    echo json_encode(['status' => 'allowed']);
+}
+
+function firewall_enforce_limit($ip, $limit, $window, $banDuration = 3600, $domain = 'local') {
+    $db = Database::connect();
+    $now = time();
+
+    // Nettoyage périodique
+    if (rand(1, 100) === 1) {
+        $db->exec("DELETE FROM firewall_traffic WHERE first_request_at < " . ($now - $window));
+    }
+
+    $stmt = $db->prepare("SELECT * FROM firewall_traffic WHERE ip_address = ? AND domain = ?");
+    $stmt->execute([$ip, $domain]);
+    $traffic = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($traffic) {
+        if ($now - $traffic['first_request_at'] > $window) {
+            // Reset
+            $upd = $db->prepare("UPDATE firewall_traffic SET request_count = 1, first_request_at = ? WHERE ip_address = ? AND domain = ?");
+            $upd->execute([$now, $ip, $domain]);
+        } else {
+            // Increment
+            if ($traffic['request_count'] >= $limit) {
+                // BAN
+                firewall_ban_ip($ip, "Rate Limit Exceeded on $domain ($limit req/$window s)", $banDuration);
+
+                // Si c'est l'API, on ne fait pas exit mais on retourne JSON dans l'appelant
+                // Si c'est local, on fait exit
+                if ($domain === 'local') {
+                    firewall_render_denied($ip, "Rate Limit Exceeded");
+                    exit;
+                } else {
+                    // Pour l'API, on doit retourner le blocage immédiatement
+                    echo json_encode(['status' => 'blocked', 'reason' => "Rate Limit Exceeded"]);
+                    exit;
+                }
+            }
+            $upd = $db->prepare("UPDATE firewall_traffic SET request_count = request_count + 1 WHERE ip_address = ? AND domain = ?");
+            $upd->execute([$ip, $domain]);
+        }
+    } else {
+        $ins = $db->prepare("INSERT INTO firewall_traffic (ip_address, request_count, first_request_at, domain) VALUES (?, 1, ?, ?)");
+        $ins->execute([$ip, $now, $domain]);
+    }
+}
+
+
 function firewall_check() {
-    // CORRECTION: Utilisation de Database::connect() au lieu de global $db
-    // Cela évite l'erreur "Call to a member function prepare() on null"
+    // Mode Local
     $db = Database::connect();
     $ip = firewall_get_ip();
 
-    // A. CHECK BANS
+    // Check Bans
     $stmt = $db->prepare("SELECT * FROM firewall_bans WHERE ip_address = ? AND (expires_at IS NULL OR expires_at > NOW())");
     $stmt->execute([$ip]);
     $ban = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -62,10 +205,7 @@ function firewall_check() {
         exit;
     }
 
-    // B. RATE LIMITING
-    // Récupération des limites via Settings (ou valeurs par défaut)
-    // Settings::get() est statique et dispo si Settings chargé (ce qui est le cas dans index.php)
-    // Si Settings n'est pas dispo (ex: script externe), on garde le défaut.
+    // Rate Limit Local
     if (class_exists('Settings')) {
         $limit = (int) Settings::get('firewall_limit', 100);
         $window = (int) Settings::get('firewall_window', 60);
@@ -73,48 +213,13 @@ function firewall_check() {
         $limit = 100;
         $window = 60;
     }
-
-    // Sécurité anti-crash si admin met 0
     if ($limit <= 0) $limit = 100;
     if ($window <= 0) $window = 60;
 
-    $now = time();
-
-    // Nettoyage périodique (chance 1/100) pour éviter d'exploser la table
-    if (rand(1, 100) === 1) {
-        $db->exec("DELETE FROM firewall_traffic WHERE first_request_at < " . ($now - $window));
-    }
-
-    $stmt = $db->prepare("SELECT * FROM firewall_traffic WHERE ip_address = ?");
-    $stmt->execute([$ip]);
-    $traffic = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($traffic) {
-        // Fenêtre expirée ?
-        if ($now - $traffic['first_request_at'] > $window) {
-            // Reset
-            $upd = $db->prepare("UPDATE firewall_traffic SET request_count = 1, first_request_at = ? WHERE ip_address = ?");
-            $upd->execute([$now, $ip]);
-        } else {
-            // Incrément
-            if ($traffic['request_count'] >= $limit) {
-                // BAN !
-                firewall_ban_ip($ip, "Rate Limit Exceeded ($limit req/$window s)", 3600); // Ban 1h
-                firewall_render_denied($ip, "Rate Limit Exceeded");
-                exit;
-            }
-            $upd = $db->prepare("UPDATE firewall_traffic SET request_count = request_count + 1 WHERE ip_address = ?");
-            $upd->execute([$ip]);
-        }
-    } else {
-        // Nouveau
-        $ins = $db->prepare("INSERT INTO firewall_traffic (ip_address, request_count, first_request_at) VALUES (?, 1, ?)");
-        $ins->execute([$ip, $now]);
-    }
+    firewall_enforce_limit($ip, $limit, $window, 3600, 'local');
 }
 
 function firewall_ban_ip($ip, $reason, $durationSeconds = 86400) {
-    // CORRECTION: Utilisation de Database::connect()
     $db = Database::connect();
     $expires = date('Y-m-d H:i:s', time() + $durationSeconds);
     $stmt = $db->prepare("INSERT INTO firewall_bans (ip_address, reason, expires_at) VALUES (?, ?, ?)");
@@ -122,22 +227,8 @@ function firewall_ban_ip($ip, $reason, $durationSeconds = 86400) {
 }
 
 function firewall_render_denied($ip, $reason) {
-    // On charge la vue directement
-    // On définit les variables pour la vue
-    $error_ip = $ip;
-    $error_reason = $reason;
-
-    // On force le status 403
     http_response_code(403);
-
-    // On essaie de charger le thème, sinon fallback simple
     if (file_exists(__DIR__ . '/../../themes/default/access_denied.php')) {
-        // Simulation View::render sans le wrapper pour être sûr
-        // Mais on veut quand même le style si possible.
-        // Utilisons View::render avec layout false, ou include direct.
-        // Comme on est dans un module, View est dispo.
-
-        // On doit s'assurer que View est chargé (normalement oui via index.php)
         if (class_exists('View')) {
             View::render('access_denied', ['ip' => $ip, 'reason' => $reason], 'default', false);
         } else {
@@ -148,5 +239,7 @@ function firewall_render_denied($ip, $reason) {
     }
 }
 
-// Exécution immédiate
-firewall_check();
+// Exécution immédiate (pour le trafic local)
+if (!isset($_GET['firewall_api']) && !isset($_GET['firewall_js'])) {
+    firewall_check();
+}

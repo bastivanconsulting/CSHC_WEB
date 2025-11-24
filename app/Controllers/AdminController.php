@@ -277,4 +277,47 @@ class AdminController {
         }
         header('Location: /admin/settings'); exit;
     }
+
+    // --- ACTIONS FIREWALL SITES ---
+
+    public function firewallSites() {
+        $this->checkAdmin();
+        $db = Database::connect();
+
+        // Ensure table exists (Module usually handles this but good to be safe)
+        // We assume module has run.
+
+        $sites = $db->query("SELECT * FROM firewall_sites ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+        View::render('admin_firewall_sites', ['sites' => $sites], 'admin');
+    }
+
+    public function addFirewallSite() {
+        $this->checkAdmin();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $db = Database::connect();
+            try {
+                $stmt = $db->prepare("INSERT INTO firewall_sites (domain, req_limit, req_window, ban_duration) VALUES (?, ?, ?, ?)");
+                $stmt->execute([
+                    $_POST['domain'],
+                    $_POST['req_limit'],
+                    $_POST['req_window'],
+                    $_POST['ban_duration']
+                ]);
+            } catch (Exception $e) {
+                // Handle duplicate or error
+            }
+        }
+        header('Location: /admin/firewall/sites'); exit;
+    }
+
+    public function deleteFirewallSite() {
+        $this->checkAdmin();
+        if (isset($_POST['id'])) {
+            $db = Database::connect();
+            $stmt = $db->prepare("DELETE FROM firewall_sites WHERE id = ?");
+            $stmt->execute([$_POST['id']]);
+        }
+        header('Location: /admin/firewall/sites'); exit;
+    }
 }

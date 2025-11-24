@@ -90,6 +90,11 @@ $router->add('admin/toggle-module', 'AdminController', 'toggleModule'); // L'act
 $router->add('admin/settings', 'AdminController', 'settings');
 $router->add('admin/settings/save', 'AdminController', 'saveSettings');
 
+// --- ROUTES FIREWALL SITES ---
+$router->add('admin/firewall/sites', 'AdminController', 'firewallSites');
+$router->add('admin/firewall/sites/add', 'AdminController', 'addFirewallSite');
+$router->add('admin/firewall/sites/delete', 'AdminController', 'deleteFirewallSite');
+
 // Dispatch
 $url = isset($_GET['url']) ? $_GET['url'] : 'home';
 $router->dispatch($url);
