@@ -16,6 +16,17 @@ class ClientFirewallController {
         $sites->execute([$userId]);
         $sites = $sites->fetchAll(PDO::FETCH_ASSOC);
 
+        // Self-healing: Generate tokens for legacy sites that have none
+        foreach ($sites as &$site) {
+            if (empty($site['verification_token'])) {
+                $token = bin2hex(random_bytes(16));
+                $db->prepare("UPDATE firewall_sites SET verification_token = ? WHERE id = ?")
+                   ->execute([$token, $site['id']]);
+                $site['verification_token'] = $token;
+            }
+        }
+        unset($site); // Break reference
+
         View::render('client_firewall', ['sites' => $sites], 'front');
     }
 
