@@ -8,6 +8,26 @@
     <!-- [HOOK] Widgets : Pour afficher des graphiques globaux ou le Profil Client -->
     <?= Hook::call('client_dashboard_widgets') ?>
 
+    <!-- WAF Promo / Shortcut -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="glass-card p-4 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div class="p-3 rounded-circle bg-primary bg-opacity-10 me-3 text-primary border border-primary border-opacity-25">
+                        <i class="fas fa-shield-virus fa-2x"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-white mb-1">Protection WAF & Anti-DDoS</h4>
+                        <p class="text-secondary small mb-0">Sécurisez vos sites externes avec notre pare-feu applicatif (Web Application Firewall).</p>
+                    </div>
+                </div>
+                <a href="/client/firewall" class="btn btn-primary">
+                    Gérer ma protection <i class="fas fa-arrow-right ms-2"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
         <?php foreach($services as $s): ?>
         <div class="col-lg-6">
