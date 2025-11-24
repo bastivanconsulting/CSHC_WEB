@@ -10,14 +10,16 @@ define('SSO_MODULE_NAME', 'SSOConfig');
 
 // Définition des modèles préconfigurés
 $sso_templates = [
-    'manual' => ['name' => 'Manuel / Personnalisé', 'type' => 'OIDC'],
-    'saml_manual' => ['name' => 'SAML (Métadonnées URL)', 'type' => 'SAML'],
-    'google' => ['name' => 'Google Workspace / Cloud', 'type' => 'OIDC', 'client_id' => 'VOTRE_ID.apps.googleusercontent.com'],
+    'manual' => ['name' => 'Manuel / Personnalisé (OIDC)', 'type' => 'OIDC'],
+    // 'saml_manual' => ['name' => 'SAML (Métadonnées URL)', 'type' => 'SAML'], // TODO: Implémenter SAML
+    'google' => ['name' => 'Google Workspace / Cloud', 'type' => 'OIDC', 'client_id' => 'VOTRE_ID.apps.googleusercontent.com', 'metadata_url' => 'https://accounts.google.com/.well-known/openid-configuration'],
     'azure' => ['name' => 'Microsoft Azure AD / Office 365', 'type' => 'OIDC', 'metadata_url' => 'https://login.microsoftonline.com/VOTRE_TENANT_ID/v2.0/.well-known/openid-configuration'],
-    'whmcs' => ['name' => 'WHMCS (OIDC/API)', 'type' => 'OIDC'],
+    'okta' => ['name' => 'Okta', 'type' => 'OIDC', 'metadata_url' => 'https://VOTRE_DOMAINE.okta.com/.well-known/openid-configuration'],
+    'cloudflare' => ['name' => 'Cloudflare Zero Trust', 'type' => 'OIDC', 'metadata_url' => 'https://VOTRE_TEAM.cloudflareaccess.com/.well-known/openid-configuration'],
+    'keycloak' => ['name' => 'KeyCloak', 'type' => 'OIDC', 'metadata_url' => 'https://sso.votredomaine.com/realms/VOTRE_REALM/.well-known/openid-configuration'],
 ];
 
-// 1. INITIALISATION BDD (Création de la table de configuration)
+// 1. INITIALISATION BDD
 $db = Database::connect();
 try {
     // Exécuter la création avec IF NOT EXISTS pour la robustesse
@@ -29,9 +31,22 @@ try {
         metadata_url TEXT NULL,
         client_id VARCHAR(255) NULL,
         client_secret VARCHAR(255) NULL,
+        auto_create_user BOOLEAN DEFAULT FALSE,
+        default_role ENUM('client', 'admin') DEFAULT 'client',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
-} catch (Exception $e) { /* Ne rien faire si la table existe */ }
+
+    // Vérification des colonnes pour migration (approche plus légère que try/catch aveugle)
+    $columns = $db->query("SHOW COLUMNS FROM sso_providers")->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!in_array('auto_create_user', $columns)) {
+        $db->exec("ALTER TABLE sso_providers ADD COLUMN auto_create_user BOOLEAN DEFAULT FALSE");
+    }
+    if (!in_array('default_role', $columns)) {
+        $db->exec("ALTER TABLE sso_providers ADD COLUMN default_role ENUM('client', 'admin') DEFAULT 'client'");
+    }
+
+} catch (Exception $e) { /* Ne rien faire si erreur */ }
 
 
 // 2. SIGNALER QUE CE MODULE A UNE PAGE DE CONFIGURATION
@@ -40,6 +55,18 @@ Hook::listen('get_module_config_url', function($moduleName) {
         return '/admin/sso-config';
     }
 });
+
+// 3. HOOK POUR AFFICHER LES BOUTONS SUR LA PAGE DE LOGIN
+Hook::listen('get_sso_login_options', function($providers_list = []) {
+    $ssoState = getSsoState();
+    if ($ssoState['is_active']) {
+        foreach($ssoState['providers'] as $p) {
+            $providers_list[] = $p;
+        }
+    }
+    return $providers_list;
+});
+
 
 /**
  * Fonction utilitaire pour charger l'état d'activation et les fournisseurs SSO.
@@ -53,20 +80,14 @@ function getSsoState() {
     $stmt_active->execute([SSO_SETTINGS_KEY]);
     $isActive = (json_decode($stmt_active->fetchColumn() ?: '{}', true)['is_active'] ?? 'off') === 'on';
 
-    // CORRECTION CRITIQUE: Mise en try/catch pour la lecture des fournisseurs
     try {
         // Charger la liste des fournisseurs
-        $providers = $db->query("SELECT id, name, domain, sso_type, metadata_url, client_id FROM sso_providers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $providers = $db->query("SELECT * FROM sso_providers ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
-        // Si la colonne n'est pas trouvée (problème de synchronisation de schéma), on ignore le crash
-        if (strpos($e->getMessage(), 'Unknown column') !== false) {
-             return [
-                'is_active' => $isActive,
-                'providers' => []
-            ];
-        }
-        // Si c'est une autre erreur, on la relance
-        throw $e;
+        return [
+            'is_active' => $isActive,
+            'providers' => []
+        ];
     }
     
     return [
@@ -75,10 +96,34 @@ function getSsoState() {
     ];
 }
 
+// Helper pour les requêtes HTTP (OIDC)
+function sso_http_request($url, $method = 'GET', $data = [], $headers = []) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
-// 3. CRÉER LA ROUTE DE CONFIGURATION
+    if ($method === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+    }
+
+    if (!empty($headers)) {
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    }
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return ['code' => $httpCode, 'body' => $response];
+}
+
+
+// 4. ROUTAGE ET LOGIQUE SSO
 Hook::listen('register_routes', function($routes) use ($sso_templates) {
     
+    // Route ADMIN - Configuration
     $routes['admin/sso-config'] = function() use ($sso_templates) {
         if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
             header('Location: /login'); exit;
@@ -110,15 +155,19 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                     $client_id = $_POST['client_id'];
                     $client_secret = $_POST['client_secret'];
                     
+                    // Nouveaux champs
+                    $auto_create = isset($_POST['auto_create_user']) ? 1 : 0;
+                    $default_role = $_POST['default_role'] ?? 'client';
+
                     // Validation simple
                     if (empty($name) || empty($sso_type)) { throw new Exception("Nom et Type sont obligatoires."); }
                     
-                    $sql = "INSERT INTO sso_providers (name, domain, sso_type, metadata_url, client_id, client_secret) 
-                            VALUES (?, ?, ?, ?, ?, ?)
-                            ON DUPLICATE KEY UPDATE domain=VALUES(domain), sso_type=VALUES(sso_type), metadata_url=VALUES(metadata_url), client_id=VALUES(client_id), client_secret=VALUES(client_secret)";
+                    $sql = "INSERT INTO sso_providers (name, domain, sso_type, metadata_url, client_id, client_secret, auto_create_user, default_role)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ON DUPLICATE KEY UPDATE domain=VALUES(domain), sso_type=VALUES(sso_type), metadata_url=VALUES(metadata_url), client_id=VALUES(client_id), client_secret=VALUES(client_secret), auto_create_user=VALUES(auto_create_user), default_role=VALUES(default_role)";
                     
                     $stmt = $db->prepare($sql);
-                    $stmt->execute([$name, $domain, $sso_type, $metadata, $client_id, $client_secret]);
+                    $stmt->execute([$name, $domain, $sso_type, $metadata, $client_id, $client_secret, $auto_create, $default_role]);
                     $message = "<div class='alert alert-success'><i class='fas fa-check'></i> Fournisseur <strong>$name</strong> sauvegardé.</div>";
     
                 } catch (Exception $e) {
@@ -171,17 +220,17 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                 <!-- Formulaire d'ajout/édition de Fournisseur -->
                 <div class="col-lg-6">
                     <div class="glass-card p-4">
-                        <h5 class="text-warning mb-3">Ajouter un Fournisseur IdP (SAML ou OIDC)</h5>
+                        <h5 class="text-warning mb-3">Ajouter/Modifier un Fournisseur</h5>
                         <form method="POST">
                             <input type="hidden" name="save_provider" value="1">
                             
                             <!-- Modèle de Configuration -->
                             <div class="mb-3">
-                                <label class="small text-secondary">Sélectionner un Modèle de base</label>
+                                <label class="small text-secondary">Sélectionner un Modèle</label>
                                 <select class="form-select bg-dark text-white" id="ssoTemplate" onchange="applyTemplate()">
                                     <?php foreach($sso_templates as $key => $tpl): ?>
                                         <option value='<?= $key ?>' data-type='<?= $tpl['type'] ?>' data-metadata='<?= $tpl['metadata_url'] ?? '' ?>' data-id='<?= $tpl['client_id'] ?? '' ?>'>
-                                            <?= $tpl['name'] ?> (<?= $tpl['type'] ?>)
+                                            <?= $tpl['name'] ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -198,22 +247,41 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                             </div>
 
                             <hr class="border-secondary opacity-25 my-4">
+
+                            <!-- Mode Provisioning (Mode "i") -->
+                            <div class="mb-3">
+                                <h6 class="small text-info">Provisioning Utilisateur (Mode "i")</h6>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="autoCreateUser" name="auto_create_user" value="1">
+                                    <label class="form-check-label text-white small" for="autoCreateUser">Créer automatiquement l'utilisateur s'il n'existe pas</label>
+                                </div>
+
+                                <label class="small text-secondary">Rôle par défaut</label>
+                                <select name="default_role" class="form-select bg-dark text-white">
+                                    <option value="client">Client</option>
+                                    <option value="admin">Administrateur</option>
+                                </select>
+                            </div>
+
+                            <hr class="border-secondary opacity-25 my-4">
                             
                             <!-- Type (Caché ou Affiché) -->
                             <input type="hidden" name="sso_type" id="ssoTypeField">
 
-                            <!-- SAML FIELDS -->
+                            <!-- SAML FIELDS (Désactivé pour le moment) -->
                             <div id="samlFields" style="display:none;">
-                                <h6 class="small text-info mb-3">Configuration SAML (Métadonnées)</h6>
-                                <div class="mb-3">
-                                    <label class="small text-secondary">URL des Métadonnées IDP</label>
-                                    <input type="url" name="metadata_url" id="metadataUrl" class="form-control" placeholder="https://idp.client.com/saml/metadata.xml">
+                                <div class="alert alert-warning small">
+                                    <i class="fas fa-exclamation-triangle"></i> Le support SAML n'est pas encore disponible. Veuillez utiliser OIDC.
                                 </div>
                             </div>
                             
                             <!-- OIDC FIELDS -->
                             <div id="oidcFields" style="display:none;">
                                 <h6 class="small text-info mb-3">Configuration OIDC / OAuth2</h6>
+                                <div class="mb-3">
+                                    <label class="small text-secondary">URL de découverte (.well-known)</label>
+                                    <input type="url" name="metadata_url" id="oidcMetadataUrl" class="form-control" placeholder="https://.../.well-known/openid-configuration">
+                                </div>
                                 <div class="mb-3">
                                     <label class="small text-secondary">Client ID</label>
                                     <input type="text" name="client_id" id="clientId" class="form-control" placeholder="Clé d'application OIDC">
@@ -237,7 +305,7 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                         </div>
                         <div class="table-responsive">
                             <table class="table table-dark-transparent align-middle mb-0">
-                                <thead><tr><th>Nom & Domaine</th><th>Type</th><th>Actions</th></tr></thead>
+                                <thead><tr><th>Nom</th><th>Détails</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     <?php if(empty($providers)): ?>
                                         <tr><td colspan="3" class="text-center text-muted py-4">Aucune configuration SSO.</td></tr>
@@ -246,10 +314,11 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                                     <tr>
                                         <td>
                                             <div class="fw-bold text-white"><?= htmlspecialchars($p['name']) ?></div>
-                                            <?php if($p['domain']): ?><small class="text-muted font-monospace"><?= htmlspecialchars($p['domain']) ?></small><?php endif; ?>
+                                            <span class="badge bg-<?= $p['sso_type'] === 'SAML' ? 'info' : 'primary' ?>"><?= $p['sso_type'] ?></span>
                                         </td>
                                         <td>
-                                            <span class="badge bg-<?= $p['sso_type'] === 'SAML' ? 'info' : 'primary' ?>"><?= $p['sso_type'] ?></span>
+                                            <div class="small text-muted">Auto-création: <?= $p['auto_create_user'] ? '<span class="text-success">Oui</span>' : '<span class="text-secondary">Non</span>' ?></div>
+                                            <div class="small text-muted">Rôle: <?= htmlspecialchars($p['default_role']) ?></div>
                                         </td>
                                         <td>
                                             <form method="POST" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')">
@@ -270,8 +339,6 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
 
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Script d'initialisation pour afficher/masquer les champs OIDC/SAML
-            
             const templateSelector = document.getElementById('ssoTemplate');
             const providerName = document.getElementById('providerName');
             const ssoTypeField = document.getElementById('ssoTypeField');
@@ -279,6 +346,7 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
             const samlFields = document.getElementById('samlFields');
             const oidcFields = document.getElementById('oidcFields');
             const metadataUrl = document.getElementById('metadataUrl');
+            const oidcMetadataUrl = document.getElementById('oidcMetadataUrl');
             const clientId = document.getElementById('clientId');
             
             window.applyTemplate = function() {
@@ -288,11 +356,16 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                 const id = selected.getAttribute('data-id');
                 const name = selected.text.split(' (')[0];
 
-                // Mettre à jour les champs
-                providerName.value = name;
+                if(name !== 'Manuel / Personnalisé') {
+                    // providerName.value = name; // Ne pas écraser si l'utilisateur a déjà tapé
+                }
                 ssoTypeField.value = type;
                 
-                metadataUrl.value = metadata;
+                if (type === 'OIDC') {
+                     oidcMetadataUrl.value = metadata;
+                } else {
+                     metadataUrl.value = metadata;
+                }
                 clientId.value = id;
 
                 // Afficher/Masquer les blocs
@@ -300,21 +373,17 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
                     samlFields.style.display = 'block';
                     oidcFields.style.display = 'none';
                     metadataUrl.setAttribute('required', 'required');
+                    oidcMetadataUrl.removeAttribute('required');
                     clientId.removeAttribute('required');
                 } else if (type === 'OIDC') {
                     samlFields.style.display = 'none';
                     oidcFields.style.display = 'block';
                     metadataUrl.removeAttribute('required');
+                    // oidcMetadataUrl.setAttribute('required', 'required'); // Pas forcément requis si URLs manuelles mais on recommande
                     clientId.setAttribute('required', 'required');
-                } else {
-                    samlFields.style.display = 'none';
-                    oidcFields.style.display = 'none';
-                    metadataUrl.removeAttribute('required');
-                    clientId.removeAttribute('required');
                 }
             };
 
-            // Appliquer le modèle par défaut (Manuel / Personnalisé)
             applyTemplate();
         });
         </script>
@@ -322,5 +391,185 @@ Hook::listen('register_routes', function($routes) use ($sso_templates) {
         $content = ob_get_clean();
         require __DIR__ . '/../../themes/admin_default/layout.php';
     };
+
+    // --- LOGIQUE SSO PUBLIC ---
+
+    // 1. INIT LOGIN (Redirection vers IdP)
+    $routes['auth/sso/login/(\d+)'] = function($providerId) {
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT * FROM sso_providers WHERE id = ?");
+        $stmt->execute([$providerId]);
+        $provider = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$provider) { die("Fournisseur SSO introuvable."); }
+
+        if ($provider['sso_type'] === 'OIDC') {
+            // Découverte OIDC (fetch metadata)
+            $metadataUrl = $provider['metadata_url'];
+            if (!$metadataUrl) { die("URL de métadonnées manquante pour ce fournisseur OIDC."); }
+
+            // Cache simple des métadonnées (optionnel mais recommandé pour perf, ici direct)
+            $metaRes = sso_http_request($metadataUrl);
+            if ($metaRes['code'] !== 200) { die("Impossible de récupérer les métadonnées OIDC: " . $metaRes['body']); }
+
+            $metadata = json_decode($metaRes['body'], true);
+            $authEndpoint = $metadata['authorization_endpoint'] ?? null;
+
+            if (!$authEndpoint) { die("Endpoint d'autorisation introuvable dans les métadonnées."); }
+
+            // Génération State / Nonce
+            $state = bin2hex(random_bytes(16));
+            $nonce = bin2hex(random_bytes(16));
+
+            $_SESSION['sso_state'] = $state;
+            $_SESSION['sso_provider_id'] = $providerId;
+            $_SESSION['sso_nonce'] = $nonce;
+
+            // Construction URL Auth
+            $redirectUri = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/auth/sso/callback';
+
+            $params = [
+                'client_id' => $provider['client_id'],
+                'response_type' => 'code',
+                'scope' => 'openid profile email',
+                'redirect_uri' => $redirectUri,
+                'state' => $state,
+                'nonce' => $nonce
+            ];
+
+            $loginUrl = $authEndpoint . '?' . http_build_query($params);
+            header("Location: $loginUrl");
+            exit;
+
+        } elseif ($provider['sso_type'] === 'SAML') {
+            die("Le support SAML n'est pas encore implémenté complètement. Veuillez utiliser OIDC pour le moment.");
+        }
+    };
+
+    // 2. CALLBACK (Retour de l'IdP)
+    $routes['auth/sso/callback'] = function() {
+        if (!isset($_GET['code']) || !isset($_GET['state'])) {
+            die("Requête invalide (code ou state manquant).");
+        }
+
+        $code = $_GET['code'];
+        $state = $_GET['state'];
+
+        if (!isset($_SESSION['sso_state']) || $_SESSION['sso_state'] !== $state) {
+            die("Erreur de sécurité : State mismatch (CSRF detected).");
+        }
+
+        $providerId = $_SESSION['sso_provider_id'];
+        unset($_SESSION['sso_state']); // Clean up
+
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT * FROM sso_providers WHERE id = ?");
+        $stmt->execute([$providerId]);
+        $provider = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$provider || $provider['sso_type'] !== 'OIDC') { die("Provider invalide."); }
+
+        // Récupérer endpoint token via metadata
+        $metaRes = sso_http_request($provider['metadata_url']);
+        $metadata = json_decode($metaRes['body'], true);
+
+        $tokenEndpoint = $metadata['token_endpoint'];
+        $userInfoEndpoint = $metadata['userinfo_endpoint'];
+        $redirectUri = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/auth/sso/callback';
+
+        // Échange Code -> Token
+        $postData = [
+            'grant_type' => 'authorization_code',
+            'client_id' => $provider['client_id'],
+            'client_secret' => $provider['client_secret'],
+            'code' => $code,
+            'redirect_uri' => $redirectUri
+        ];
+
+        $tokenRes = sso_http_request($tokenEndpoint, 'POST', $postData);
+        $tokenData = json_decode($tokenRes['body'], true);
+
+        if (!isset($tokenData['access_token'])) {
+            die("Erreur lors de l'échange de token: " . $tokenRes['body']);
+        }
+
+        $accessToken = $tokenData['access_token'];
+
+        // Récupérer Infos User
+        $userRes = sso_http_request($userInfoEndpoint, 'GET', [], ["Authorization: Bearer $accessToken"]);
+        $userInfo = json_decode($userRes['body'], true);
+
+        if (!isset($userInfo['email'])) {
+            die("Impossible de récupérer l'email de l'utilisateur.");
+        }
+
+        $email = $userInfo['email'];
+        // $firstName = $userInfo['given_name'] ?? '';
+        // $lastName = $userInfo['family_name'] ?? '';
+
+        // --- LOGIQUE DE CONNEXION / CRÉATION ---
+
+        $stmtUser = $db->prepare("SELECT * FROM users WHERE email = ?");
+        $stmtUser->execute([$email]);
+        $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+
+        if ($user) {
+            // Utilisateur existant -> Login
+             if ($user['status'] === 'suspended') {
+                 die("Compte suspendu.");
+             }
+             $_SESSION['user'] = $user;
+             // Update last login ip?
+             Hook::call('user_login_success', ['user' => $user]);
+
+             if($user['role'] === 'admin') {
+                header('Location: /admin');
+             } else {
+                header('Location: /dashboard');
+             }
+             exit;
+
+        } else {
+            // Utilisateur inexistant
+            if ($provider['auto_create_user']) {
+                // "Mode i" : Création automatique
+                $password = password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT); // Random password
+                $role = $provider['default_role'];
+
+                try {
+                    // Insérer l'utilisateur
+                    $insert = $db->prepare("INSERT INTO users (email, password, role, status, created_at) VALUES (?, ?, ?, 'active', NOW())");
+                    $insert->execute([$email, $password, $role]);
+                    $newUserId = $db->lastInsertId();
+
+                    // Recharger l'utilisateur
+                    $stmtUser->execute([$email]);
+                    $newUser = $stmtUser->fetch(PDO::FETCH_ASSOC);
+
+                    $_SESSION['user'] = $newUser;
+                    $_SESSION['flash_success'] = "Bienvenue ! Votre compte a été créé automatiquement via SSO.";
+
+                    Hook::call('user_login_success', ['user' => $newUser]);
+
+                    if($role === 'admin') {
+                        header('Location: /admin');
+                    } else {
+                        header('Location: /dashboard');
+                    }
+                    exit;
+
+                } catch (Exception $e) {
+                    die("Erreur lors de la création du compte : " . $e->getMessage());
+                }
+
+            } else {
+                $_SESSION['flash_error'] = "Aucun compte associé à cet email ($email). Veuillez contacter l'administrateur.";
+                header('Location: /login');
+                exit;
+            }
+        }
+
+    };
+
     return $routes;
 });
