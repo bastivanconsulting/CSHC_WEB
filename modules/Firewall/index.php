@@ -119,12 +119,37 @@ if (isset($_GET['firewall_js'])) {
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
     $rayId = substr(md5(uniqid($ip, true)), 0, 16);
 
+    // Proxy / Bad IP Detection Logic
+    $isSuspicious = false;
+    $proxyHeaders = ['HTTP_VIA', 'HTTP_X_FORWARDED_FOR', 'HTTP_FORWARDED', 'HTTP_X_FORWARDED', 'HTTP_CLIENT_IP', 'HTTP_FORWARDED_FOR_IP'];
+    foreach ($proxyHeaders as $header) {
+        if (isset($_SERVER[$header])) {
+            $isSuspicious = true;
+            break;
+        }
+    }
+    // Note: Add external reputation list checks here if needed.
+
+    // Math Captcha Generation
+    $c1 = rand(1, 10);
+    $c2 = rand(1, 10);
+    $cSalt = date('Ymd') . 'CSHC_SALT';
+    $cHash = md5(($c1 + $c2) . $cSalt);
+
+    // Prepare JS variables
+    $jsSuspicious = $isSuspicious ? 'true' : 'false';
+
     echo <<<JS
 (function(){
     var API_URL = "$apiUrl";
     var domain = window.location.hostname;
     var clientIp = "$ip";
     var rayId = "$rayId";
+    var isSuspicious = $jsSuspicious;
+    var captcha = {
+        q: "$c1 + $c2",
+        hash: "$cHash"
+    };
 
     // Helper: Get Token
     function getToken() {
@@ -217,10 +242,22 @@ if (isset($_GET['firewall_js'])) {
                     </div>
                 </div>
 
-                <p style="color:#64748b;font-size:0.75rem;margin-top:2rem;border-top:1px solid rgba(255,255,255,0.1);padding-top:1.5rem;">
+                <!-- Captcha Container (Hidden by default) -->
+                <div id="cshc-captcha-container" style="display:none;margin-top:2rem;border-top:1px solid rgba(255,255,255,0.1);padding-top:1.5rem;">
+                    <div style="margin-bottom:1rem;color:#94a3b8;">
+                        <p style="color:#ef4444;font-weight:bold;margin-bottom:0.5rem;">⚠️ Suspicious Activity Detected</p>
+                        <p style="font-size:0.9rem;">Please solve: <strong style="color:white;">` + captcha.q + ` = ?</strong></p>
+                    </div>
+                    <div style="display:flex;justify-content:center;gap:0.5rem;">
+                        <input type="number" id="cshc-ans" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:0.5rem;border-radius:0.25rem;width:80px;text-align:center;font-size:1.1rem;">
+                        <button id="cshc-verify-btn" style="background:#2563eb;color:white;border:none;padding:0.5rem 1.5rem;border-radius:0.25rem;cursor:pointer;font-weight:600;transition:background 0.2s;">Verify</button>
+                    </div>
+                </div>
+
+                <div id="cshc-footer" style="color:#64748b;font-size:0.75rem;margin-top:2rem;border-top:1px solid rgba(255,255,255,0.1);padding-top:1.5rem;">
                     CoreSecure Hybrid Connect (CSHC)<br>
                     <span style="color:#475569;">by Bastivan Consulting</span>
-                </p>
+                </div>
             </div>
         </div>
         `;
@@ -250,13 +287,39 @@ if (isset($_GET['firewall_js'])) {
             if (progress >= 100) {
                 clearInterval(interval);
                 setTimeout(function() {
-                    verifyChallenge();
+                    if (isSuspicious) {
+                        showCaptchaForm();
+                    } else {
+                        verifyChallenge();
+                    }
                 }, 500);
             }
         }, 300); // 300ms * ~25 steps = ~7.5 seconds
     }
 
-    function verifyChallenge() {
+    function showCaptchaForm() {
+        document.getElementById('cshc-status').innerText = "Additional verification required.";
+        // Hide progress bar but keep container layout
+        document.getElementById('cshc-bar').parentElement.style.opacity = '0.5';
+
+        // Show Captcha
+        var captchaDiv = document.getElementById('cshc-captcha-container');
+        captchaDiv.style.display = 'block';
+        captchaDiv.style.animation = 'cshc-fade-up 0.5s ease-out';
+
+        // Hide Footer temporarily to save space or keep it? Keep it.
+        // document.getElementById('cshc-footer').style.display = 'none';
+
+        document.getElementById('cshc-verify-btn').onclick = function() {
+            var ans = document.getElementById('cshc-ans').value;
+            if(!ans) { alert('Please enter an answer.'); return; }
+            this.innerHTML = 'Checking...';
+            this.disabled = true;
+            verifyChallenge(ans);
+        };
+    }
+
+    function verifyChallenge(answer = null) {
         var xhr = new XMLHttpRequest();
         xhr.open("POST", API_URL + "=verify", true);
         xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -272,16 +335,24 @@ if (isset($_GET['firewall_js'])) {
                         setTimeout(function(){ overlay.remove(); }, 500);
                     }
                 } else {
-                    // If auto-verify fails, show button
-                    document.getElementById('cshc-spinner').style.display = 'none';
-                    var btn = document.getElementById('cshc-solve-btn');
-                    btn.style.display = 'inline-block';
-                    btn.innerText = 'Retry Verification';
-                    btn.onclick = function() { location.reload(); };
+                    if(answer) {
+                        // Captcha failed
+                        alert('Verification failed: ' + (res.reason || 'Incorrect Answer'));
+                        location.reload();
+                    } else {
+                        // Token failed
+                        alert('Verification failed. Please try again.');
+                        location.reload();
+                    }
                 }
             }
         };
-        xhr.send("origin=" + encodeURIComponent(domain));
+        var data = "origin=" + encodeURIComponent(domain);
+        if (answer) {
+            data += "&captcha_ans=" + encodeURIComponent(answer);
+            data += "&captcha_hash=" + encodeURIComponent(captcha.hash);
+        }
+        xhr.send(data);
     }
 
     checkAccess();
@@ -431,9 +502,6 @@ function firewall_api_check() {
     $ip = firewall_get_ip();
 
     // [INTELLIGENT WAF] Analyze Payload
-    // Si mode = 'monitor', on logue seulement, on ne bloque pas pour le WAF
-    // MAIS pour l'instant l'architecture banne direct.
-    // On va modifier pour supporter 'monitor'
     if (firewall_analyze_payload()) {
         $reason = "Malicious Payload (Comodo WAF)";
         firewall_log_traffic($ip, $origin, 'waf_detect'); // Log detection
@@ -477,6 +545,20 @@ function firewall_api_verify() {
 
     $origin = $_POST['origin'] ?? '';
     $ip = firewall_get_ip();
+
+    // Check Captcha if present
+    if (isset($_POST['captcha_ans'])) {
+        $ans = $_POST['captcha_ans'];
+        $hash = $_POST['captcha_hash'];
+        $cSalt = date('Ymd') . 'CSHC_SALT';
+
+        // hash was md5( (c1+c2) . salt )
+        // We need to check if md5( $ans . $salt ) == $hash
+        if (md5($ans . $cSalt) !== $hash) {
+             echo json_encode(['status' => 'failed', 'reason' => 'Incorrect Answer']);
+             return;
+        }
+    }
 
     $token = hash('sha256', $ip . 'CSHC_SALT_' . date('Ymd'));
     echo json_encode(['status' => 'success', 'token' => $token]);
