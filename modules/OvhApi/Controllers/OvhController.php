@@ -128,7 +128,8 @@ class OvhController {
         $ptr = null;
 
         // Contexte du bloc parent si fourni
-        $parentBlock = isset($_GET['block']) ? $_GET['block'] : null;
+        // FIX: On doit décoder le bloc comme l'IP principale (remplacer _ par /)
+        $parentBlock = isset($_GET['block']) ? urldecode(str_replace('_', '/', $_GET['block'])) : null;
 
         try {
             // 1. Info IP
@@ -202,6 +203,12 @@ class OvhController {
     }
 
     private function cidrToIps($cidr) {
+        // Detecter IPv6
+        if (strpos($cidr, ':') !== false) {
+            // Pas de listing pour IPv6 (trop grand / non supporté par ip2long)
+            return [];
+        }
+
         $ips = [];
         list($ip, $mask) = explode('/', $cidr);
 
@@ -224,6 +231,77 @@ class OvhController {
         }
 
         return $ips;
+    }
+
+    // --- DASHBOARD : SERVERS ---
+    public function servers() {
+        $this->checkAdmin();
+        $ovh = $this->getApiClient();
+
+        $servers = [];
+        $error = null;
+
+        if ($ovh) {
+            try {
+                $serverList = $ovh->get('/dedicated/server');
+                // Récupérer les détails sommaires (ou juste la liste)
+                // Listing complet peut être long, on affiche la liste simple
+                $servers = $serverList;
+            } catch (\Exception $e) {
+                $error = $e->getMessage();
+            }
+        }
+
+        View::render('modules/OvhApi/Views/servers', [
+            'servers' => $servers,
+            'configured' => ($ovh !== null),
+            'error' => $error
+        ], 'admin');
+    }
+
+    // --- ACTIONS: SERVER REBOOT ---
+    public function rebootServer() {
+        $this->checkAdmin();
+        $serviceName = $_POST['serviceName'];
+        $ovh = $this->getApiClient();
+
+        try {
+            $ovh->post('/dedicated/server/' . urlencode($serviceName) . '/reboot');
+            $_SESSION['flash_success'] = "Redémarrage lancé pour $serviceName";
+        } catch (\Exception $e) {
+            $_SESSION['flash_error'] = "Erreur Reboot: " . $e->getMessage();
+        }
+
+        header('Location: /admin/ovh/servers');
+    }
+
+    // --- ACTIONS: SERVER KVM ---
+    public function kvmServer() {
+        $this->checkAdmin();
+        $serviceName = $_POST['serviceName'];
+        $ovh = $this->getApiClient();
+
+        try {
+            // D'abord on demande l'accès IPMI
+            $result = $ovh->post('/dedicated/server/' . urlencode($serviceName) . '/ipmi/access', [
+                'ttl' => 15,
+                'type' => 'kvmiphtml5' // Ou 'serialjol' / 'kvmjava' selon dispo, html5 est le plus compatible web
+            ]);
+
+            // Le résultat contient l'URL ?
+            // API OVH: POST /dedicated/server/{serviceName}/ipmi/access returns { value: "url..." }
+            if (isset($result['value'])) {
+                header('Location: ' . $result['value']);
+                exit;
+            } else {
+                 $_SESSION['flash_success'] = "Accès demandé. Vérifiez vos emails ou la console OVH si redirection auto échoue.";
+            }
+
+        } catch (\Exception $e) {
+            $_SESSION['flash_error'] = "Erreur KVM: " . $e->getMessage();
+        }
+
+        header('Location: /admin/ovh/servers');
     }
 
     private function redirectBack($ip) {

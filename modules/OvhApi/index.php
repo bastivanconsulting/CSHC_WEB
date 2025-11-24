@@ -10,6 +10,11 @@ Hook::listen('register_routes', function ($routes) {
     // IP Actions
     $routes['admin/ovh/ip/(.*)'] = ['controller' => OvhController::class, 'method' => 'viewIp'];
 
+    // Server Actions
+    $routes['admin/ovh/servers'] = ['controller' => OvhController::class, 'method' => 'servers'];
+    $routes['admin/ovh/action/server/reboot'] = ['controller' => OvhController::class, 'method' => 'rebootServer'];
+    $routes['admin/ovh/action/server/kvm'] = ['controller' => OvhController::class, 'method' => 'kvmServer'];
+
     // Form Actions (POST)
     $routes['admin/ovh/action/firewall/toggle'] = ['controller' => OvhController::class, 'method' => 'toggleFirewall'];
     $routes['admin/ovh/action/firewall/rule/add'] = ['controller' => OvhController::class, 'method' => 'addRule'];
