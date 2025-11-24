@@ -43,6 +43,9 @@
                 <div class="card-body">
                     <form action="/admin/ovh/action/ptr" method="POST">
                         <input type="hidden" name="ip" value="<?= htmlspecialchars($ip) ?>">
+                        <?php if(!empty($parentBlock)): ?>
+                            <input type="hidden" name="block" value="<?= htmlspecialchars($parentBlock) ?>">
+                        <?php endif; ?>
                         <div class="input-group">
                             <input type="text" name="reverse" class="form-control bg-dark text-white border-secondary" placeholder="domain.com." value="<?= htmlspecialchars($ptr) ?>">
                             <button class="btn btn-outline-primary" type="submit"><i class="fas fa-save"></i></button>
@@ -65,6 +68,9 @@
                 <div class="card-body text-center py-4">
                     <form action="/admin/ovh/action/firewall/toggle" method="POST">
                         <input type="hidden" name="ip" value="<?= htmlspecialchars($ip) ?>">
+                        <?php if(!empty($parentBlock)): ?>
+                            <input type="hidden" name="block" value="<?= htmlspecialchars($parentBlock) ?>">
+                        <?php endif; ?>
 
                         <?php if ($firewall && $firewall['enabled']): ?>
                             <div class="mb-3 text-success">
@@ -150,6 +156,9 @@
                                             <td class="text-end pe-4">
                                                 <form action="/admin/ovh/action/firewall/rule/delete" method="POST" onsubmit="return confirm('Supprimer cette règle ?');">
                                                     <input type="hidden" name="ip" value="<?= htmlspecialchars($ip) ?>">
+                                                    <?php if(!empty($parentBlock)): ?>
+                                                        <input type="hidden" name="block" value="<?= htmlspecialchars($parentBlock) ?>">
+                                                    <?php endif; ?>
                                                     <input type="hidden" name="sequence" value="<?= $rule['sequence'] ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger border-0">
                                                         <i class="fas fa-trash"></i>
@@ -178,6 +187,9 @@
             </div>
             <form action="/admin/ovh/action/firewall/rule/add" method="POST">
                 <input type="hidden" name="ip" value="<?= htmlspecialchars($ip) ?>">
+                <?php if(!empty($parentBlock)): ?>
+                    <input type="hidden" name="block" value="<?= htmlspecialchars($parentBlock) ?>">
+                <?php endif; ?>
                 <div class="modal-body">
 
                     <div class="mb-3">
