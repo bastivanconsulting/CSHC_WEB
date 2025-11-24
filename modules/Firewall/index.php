@@ -103,6 +103,8 @@ if (isset($_GET['firewall_api'])) {
 
 // 3. JS SERVING
 if (isset($_GET['firewall_js'])) {
+    // CORRECTION CORS: Autoriser le chargement du script depuis n'importe quelle origine
+    header("Access-Control-Allow-Origin: *");
     header('Content-Type: application/javascript');
     $apiUrl = (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]/?firewall_api";
     echo <<<JS
