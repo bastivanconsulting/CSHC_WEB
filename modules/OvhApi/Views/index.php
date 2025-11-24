@@ -51,7 +51,8 @@
                                 <tr>
                                     <td class="ps-4 fw-bold font-monospace"><?= htmlspecialchars($ip) ?></td>
                                     <td class="text-end pe-4">
-                                        <a href="/admin/ovh/ip/<?= urlencode($ip) ?>" class="btn btn-sm btn-primary">
+                                        <!-- On remplace les / par _ pour éviter les problèmes de routing Apache/PHP avec les %2F -->
+                                        <a href="/admin/ovh/ip/<?= urlencode(str_replace('/', '_', $ip)) ?>" class="btn btn-sm btn-primary">
                                             <i class="fas fa-shield-alt me-1"></i> Gérer
                                         </a>
                                     </td>
