@@ -94,57 +94,96 @@ class OvhController {
     // --- DETAILS IP (Firewall & PTR) ---
     public function viewIp($encodedIp) {
         $this->checkAdmin();
-        // $encodedIp est capture par regex, souvent il faut decoder car '/' -> '%2F'
-        $ip = urldecode($encodedIp);
+        // $encodedIp est capture par regex.
+        // 1. On remplace le séparateur de sécurité '_' par '/'
+        $ip = str_replace('_', '/', $encodedIp);
+        // 2. On décode au cas où
+        $ip = urldecode($ip);
 
         $ovh = $this->getApiClient();
         if (!$ovh) { header('Location: /admin/ovh/settings'); exit; }
 
+        $error = null;
+
+        // --- CAS 1: C'est un BLOC CIDR (ex: 82.21.0.0/28) ---
+        if (strpos($ip, '/') !== false && substr($ip, -3) !== '/32') {
+            // C'est un bloc. On doit lister les IPs contenues dedans.
+            $ipsInBlock = $this->cidrToIps($ip);
+
+            View::render('modules/OvhApi/Views/view_block', [
+                'block' => $ip,
+                'ips' => $ipsInBlock
+            ], 'admin');
+            return;
+        }
+
+        // --- CAS 2: C'est une IP UNIQUE (ou /32) ---
+        // Si c'est un /32, on peut traiter comme une IP simple pour OVH
+        // Mais pour l'affichage on garde le /32 si présent, ou on l'enlève selon le besoin.
+        // OVH attend l'IP encodée.
+
         $details = [];
         $firewall = null;
         $rules = [];
-        $error = null;
         $ptr = null;
+
+        // Contexte du bloc parent si fourni
+        $parentBlock = isset($_GET['block']) ? $_GET['block'] : null;
 
         try {
             // 1. Info IP
-            $details = $ovh->get('/ip/' . urlencode($ip));
+            // Si on a un parentBlock, on peut être tenté de l'utiliser mais GET /ip/{ip} marche souvent.
+            // On essaie direct.
+            try {
+                $details = $ovh->get('/ip/' . urlencode($ip));
+            } catch (\Exception $e) {
+                // Si ça échoue, peut-être parce que l'IP n'est pas un objet racine mais fait partie d'un bloc.
+                $details = ['ip' => $ip, 'type' => 'Part of Block ' . $parentBlock];
+            }
 
             // 2. Firewall Status
-            // Check si le firewall est activé : GET /ip/{ip}/firewall/{ip}
-            // Attention: Pour une IP Failover (souvent /32), l'IP du firewall est l'IP elle-même.
-            // Si c'est un bloc, c'est plus complexe, mais le module est pour "IP Failover" qui sont souvent unitaires.
-            // On tente de récupérer le firewall pour l'IP cible.
+            // Pour le firewall, l'URL est /ip/{ipBlock}/firewall/{ipOnFirewall}
+            // Si l'IP est un Failover unitaire, ipBlock == ipOnFirewall.
+            // Si l'IP fait partie d'un bloc (ex: 82.21.0.1 dans 82.21.0.0/28),
+            // il FAUT utiliser le bloc comme base : /ip/82.21.0.0%2F28/firewall/82.21.0.1
+
+            $firewallUrlBase = '/ip/' . urlencode($ip);
+            if ($parentBlock) {
+                 $firewallUrlBase = '/ip/' . urlencode($parentBlock);
+            }
+
             try {
-                $firewall = $ovh->get('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip));
+                $firewall = $ovh->get($firewallUrlBase . '/firewall/' . urlencode($ip));
 
                 if ($firewall && $firewall['enabled']) {
                     // 3. Rules (si activé)
-                    $ruleIds = $ovh->get('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip) . '/rules');
+                    $ruleIds = $ovh->get($firewallUrlBase . '/firewall/' . urlencode($ip) . '/rules');
                     foreach ($ruleIds as $rid) {
-                        // On récupère le détail de chaque règle (peut être lent s'il y en a beaucoup,
-                        // optimisation future: ajax ou chargement lazy)
-                        // Limitons à 20 pour éviter le timeout
-                        $rules[] = $ovh->get('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip) . '/rules/' . $rid);
+                        $rules[] = $ovh->get($firewallUrlBase . '/firewall/' . urlencode($ip) . '/rules/' . $rid);
                     }
-                    // Trier par sequence
                     usort($rules, function($a, $b) {
                         return $a['sequence'] - $b['sequence'];
                     });
                 }
             } catch (\Exception $e) {
-                // Si 404, ça veut dire pas de firewall créé/activé souvent
                 $firewall = null;
             }
 
             // 4. Reverse DNS (PTR)
+            // Endpoint: /ip/{ipBlock}/reverse/{ip}
+            // Si standalone: /ip/{ip}/reverse/{ip}
+            // Si bloc: /ip/{block}/reverse/{ip}
+            $reverseUrlBase = '/ip/' . urlencode($ip);
+            if ($parentBlock) {
+                $reverseUrlBase = '/ip/' . urlencode($parentBlock);
+            }
+
             try {
-               $ptrData = $ovh->get('/ip/' . urlencode($ip) . '/reverse/' . urlencode($ip));
+               $ptrData = $ovh->get($reverseUrlBase . '/reverse/' . urlencode($ip));
                $ptr = $ptrData['reverse'] ?? '';
             } catch (\Exception $e) {
                $ptr = '';
             }
-
 
         } catch (\Exception $e) {
             $error = $e->getMessage();
@@ -156,8 +195,34 @@ class OvhController {
             'firewall' => $firewall,
             'rules' => $rules,
             'ptr' => $ptr,
-            'error' => $error
+            'error' => $error,
+            'parentBlock' => $parentBlock // Passer à la vue pour les formulaires
         ], 'admin');
+    }
+
+    private function cidrToIps($cidr) {
+        $ips = [];
+        list($ip, $mask) = explode('/', $cidr);
+
+        $mask = (int)$mask;
+        $ipLong = ip2long($ip);
+
+        // Calcul du nombre d'IPs
+        $size = pow(2, 32 - $mask);
+
+        // Start IP (Network Address)
+        // Attention: ip2long peut être signé ou non selon système, mais PHP gère bien les opérations bitwise
+        $start = $ipLong & ((-1 << (32 - $mask)));
+
+        for ($i = 0; $i < $size; $i++) {
+            $currentIp = long2ip($start + $i);
+            // On exclut souvent Network (.0) et Broadcast (.255) sur des vrais réseaux routés,
+            // mais chez OVH Failover, TOUTES les IPs sont souvent utilisables (sauf peut-être gateway si VRACK).
+            // Dans le doute, on liste TOUT. Le client saura.
+            $ips[] = $currentIp;
+        }
+
+        return $ips;
     }
 
     // --- ACTIONS: Firewall Toggle ---
@@ -190,7 +255,7 @@ class OvhController {
             $_SESSION['flash_error'] = "Erreur: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode($ip));
+        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
     }
 
     // --- ACTIONS: Add Rule ---
@@ -224,7 +289,7 @@ class OvhController {
             $_SESSION['flash_error'] = "Erreur ajout règle: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode($ip));
+        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
     }
 
     // --- ACTIONS: Delete Rule ---
@@ -242,7 +307,7 @@ class OvhController {
             $_SESSION['flash_error'] = "Erreur suppression règle: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode($ip));
+        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
     }
 
     // --- ACTIONS: PTR ---
@@ -263,6 +328,6 @@ class OvhController {
             $_SESSION['flash_error'] = "Erreur PTR: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode($ip));
+        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
     }
 }
