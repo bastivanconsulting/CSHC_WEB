@@ -225,43 +225,68 @@ class OvhController {
         return $ips;
     }
 
+    private function redirectBack($ip) {
+        $url = '/admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip));
+        if (!empty($_POST['block'])) {
+            // For the query parameter, we use standard urlencode.
+            // The / -> _ substitution is only for the PATH segment to avoid Apache 404s.
+            $url .= '?block=' . urlencode($_POST['block']);
+        }
+        header('Location: ' . $url);
+        exit;
+    }
+
     // --- ACTIONS: Firewall Toggle ---
     public function toggleFirewall() {
         $this->checkAdmin();
         $ip = $_POST['ip'];
         $action = $_POST['action']; // 'enable' or 'disable'
+        $block = $_POST['block'] ?? null;
 
         $ovh = $this->getApiClient();
 
+        // Determiner la base URL pour l'API (Gestion IP dans un bloc ou IP seule)
+        // Note: L'utilisateur veut juste que la redirection marche.
+        // Mais techniquement, si on gère une IP de bloc, il faudrait aussi ajuster l'endpoint API ?
+        // Dans viewIp j'ai mis: if ($parentBlock) $firewallUrlBase = '/ip/' . urlencode($parentBlock);
+        // Ici, si le block est passé, on devrait peut-être faire pareil pour être cohérent.
+
+        $firewallUrlBase = '/ip/' . urlencode($ip);
+        if ($block) {
+            $firewallUrlBase = '/ip/' . urlencode($block);
+        }
+
         try {
             if ($action === 'enable') {
-                // 1. Tenter de créer le firewall (si inexistant)
+                // 1. Tenter de créer le firewall
                 try {
-                    $ovh->post('/ip/' . urlencode($ip) . '/firewall', ['ipOnFirewall' => $ip]);
+                    // Endpoint create: POST /ip/{ipBlock}/firewall
+                    $ovh->post($firewallUrlBase . '/firewall', ['ipOnFirewall' => $ip]);
                 } catch (\Exception $e) {
                     // Ignore error if firewall already exists (409 Conflict)
                 }
 
                 // 2. Activer explicitement le firewall
-                $ovh->put('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip), ['enabled' => true]);
+                $ovh->put($firewallUrlBase . '/firewall/' . urlencode($ip), ['enabled' => true]);
                 $_SESSION['flash_success'] = "Firewall activé avec succès.";
 
             } else {
                 // Désactivation
-                $ovh->put('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip), ['enabled' => false]);
+                $ovh->put($firewallUrlBase . '/firewall/' . urlencode($ip), ['enabled' => false]);
                 $_SESSION['flash_success'] = "Firewall désactivé.";
             }
         } catch (\Exception $e) {
             $_SESSION['flash_error'] = "Erreur: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
+        $this->redirectBack($ip);
     }
 
     // --- ACTIONS: Add Rule ---
     public function addRule() {
         $this->checkAdmin();
         $ip = $_POST['ip'];
+        $block = $_POST['block'] ?? null;
 
         $ovh = $this->getApiClient();
 
@@ -271,25 +296,28 @@ class OvhController {
             'protocol' => $_POST['protocol'],
         ];
 
-        // Only add source if provided
         if (!empty($_POST['source'])) {
             $rule['source'] = $_POST['source'];
         }
 
-        // Ports depend on protocol
         if (in_array($_POST['protocol'], ['tcp', 'udp'])) {
              if (!empty($_POST['sourcePort'])) $rule['sourcePort'] = (int)$_POST['sourcePort'];
              if (!empty($_POST['destinationPort'])) $rule['destinationPort'] = (int)$_POST['destinationPort'];
         }
 
+        $firewallUrlBase = '/ip/' . urlencode($ip);
+        if ($block) {
+            $firewallUrlBase = '/ip/' . urlencode($block);
+        }
+
         try {
-            $ovh->post('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip) . '/rules', $rule);
+            $ovh->post($firewallUrlBase . '/firewall/' . urlencode($ip) . '/rules', $rule);
             $_SESSION['flash_success'] = "Règle ajoutée.";
         } catch (\Exception $e) {
             $_SESSION['flash_error'] = "Erreur ajout règle: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
+        $this->redirectBack($ip);
     }
 
     // --- ACTIONS: Delete Rule ---
@@ -297,17 +325,23 @@ class OvhController {
         $this->checkAdmin();
         $ip = $_POST['ip'];
         $sequence = $_POST['sequence'];
+        $block = $_POST['block'] ?? null;
 
         $ovh = $this->getApiClient();
 
+        $firewallUrlBase = '/ip/' . urlencode($ip);
+        if ($block) {
+            $firewallUrlBase = '/ip/' . urlencode($block);
+        }
+
         try {
-            $ovh->delete('/ip/' . urlencode($ip) . '/firewall/' . urlencode($ip) . '/rules/' . $sequence);
+            $ovh->delete($firewallUrlBase . '/firewall/' . urlencode($ip) . '/rules/' . $sequence);
             $_SESSION['flash_success'] = "Règle supprimée.";
         } catch (\Exception $e) {
             $_SESSION['flash_error'] = "Erreur suppression règle: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
+        $this->redirectBack($ip);
     }
 
     // --- ACTIONS: PTR ---
@@ -315,11 +349,17 @@ class OvhController {
         $this->checkAdmin();
         $ip = $_POST['ip'];
         $reverse = trim($_POST['reverse']);
+        $block = $_POST['block'] ?? null;
 
         $ovh = $this->getApiClient();
 
+        $reverseUrlBase = '/ip/' . urlencode($ip);
+        if ($block) {
+            $reverseUrlBase = '/ip/' . urlencode($block);
+        }
+
         try {
-             $ovh->post('/ip/' . urlencode($ip) . '/reverse', [
+             $ovh->post($reverseUrlBase . '/reverse', [
                  'ipReverse' => $ip,
                  'reverse' => $reverse
              ]);
@@ -328,6 +368,6 @@ class OvhController {
             $_SESSION['flash_error'] = "Erreur PTR: " . $e->getMessage();
         }
 
-        header('Location: /admin/ovh/ip/' . urlencode(str_replace('/', '_', $ip)));
+        $this->redirectBack($ip);
     }
 }
