@@ -1,5 +1,27 @@
 <?php
+// --- SECURITY: Session Hardening ---
+// Doit être fait AVANT session_start()
+session_set_cookie_params([
+    'lifetime' => 0,            // Session cookie (jusqu'à la fermeture du navigateur)
+    'path' => '/',
+    'domain' => '',             // Domaine courant
+    'secure' => true,           // Uniquement via HTTPS
+    'httponly' => true,         // Inaccessible via JS (XSS protection)
+    'samesite' => 'Strict'      // Protection CSRF stricte
+]);
+
 session_start();
+
+// --- SECURITY: HTTP Headers ---
+header("X-Frame-Options: DENY"); // Empêche le clickjacking via iframe
+header("X-Content-Type-Options: nosniff"); // Empêche le MIME-sniffing
+header("Referrer-Policy: strict-origin-when-cross-origin");
+header("X-XSS-Protection: 1; mode=block"); // Protection XSS basique (navigateurs anciens)
+// HSTS (HTTP Strict Transport Security) - Force HTTPS
+header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+// CSP (Content Security Policy) - A ajuster selon les besoins (CDN, scripts externes...)
+// On autorise 'self', 'unsafe-inline' (pour le moment nécessaire pour Alpine/Styles), et les images data:
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' https:;");
 
 // 1. Loading Environment
 require_once __DIR__ . '/../app/Core/Env.php';
@@ -14,26 +36,15 @@ require_once __DIR__ . '/../app/Core/Database.php';
 require_once __DIR__ . '/../app/Core/Router.php';
 require_once __DIR__ . '/../app/Core/Hook.php';
 require_once __DIR__ . '/../app/Core/ModuleManager.php';
-require_once __DIR__ . '/../app/Core/View.php'; 
+require_once __DIR__ . '/../app/Core/View.php';
+require_once __DIR__ . '/../app/Core/Csrf.php';
 
 // Check Maintenance Mode
 if (Env::get('MAINTENANCE_MODE') === true) {
-    // Check if user is admin to bypass? For now, we keep it simple or check a cookie/IP?
-    // "Même en mode maintenance" suggests we block everyone but show debug if error.
-    // However, usually admins want to access.
-    // Let's implement a simple check: if URL is NOT 'login' and NOT 'admin/login', we show maintenance.
-    // Or simpler: If maintenance is ON, we just render maintenance view and exit, unless it's a specific "bypass" URL.
-
-    // For this task, I will render maintenance view immediately if ON.
-    // But I will allow 'login' route maybe? No, "Mode Maintenance" usually blocks everything.
-
-    // Actually, let's keep it clean. Maintenance mode is a View.
-    // We should allow bypassing if we are already logged in as admin?
-    // Since session is started, we can check $_SESSION['user']['role']
-
+    // Check if user is admin to bypass
     $isAdmin = isset($_SESSION['user']) && $_SESSION['user']['role'] === 'admin';
 
-    if (!$isAdmin && !isset($_GET['bypass_maintenance'])) { // Simple bypass for testing
+    if (!$isAdmin && !isset($_GET['bypass_maintenance'])) {
          http_response_code(503);
          View::render('maintenance', [], 'front', false);
          exit;

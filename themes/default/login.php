@@ -25,6 +25,7 @@
                 <?php endif; ?>
 
                 <form method="POST" class="position-relative z-1">
+                    <?= Csrf::field() ?>
                     
                     <!-- Email avec Floating Label -->
                     <div class="form-floating mb-3">
