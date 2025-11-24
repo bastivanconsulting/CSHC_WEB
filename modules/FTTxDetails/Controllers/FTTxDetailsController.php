@@ -6,8 +6,6 @@ use View;
 
 class FTTxDetailsController {
 
-    // We use a constant for the View logic, but constants in classes are accessed via self:: or Class::
-    // It's cleaner to pass it or define it in the view.
     const FTTX_TYPE_KEY = 'FTTx';
 
     public function renderAdminFormFields() {
@@ -15,7 +13,7 @@ class FTTxDetailsController {
         $data = ['fttx_type_key' => self::FTTX_TYPE_KEY];
 
         ob_start();
-        View::render('modules/FTTxDetails/Views/admin_form_fields', $data, 'admin');
+        View::render('admin_form_fields', $data, 'admin');
         return ob_get_clean();
     }
 
@@ -27,7 +25,7 @@ class FTTxDetailsController {
         $data['fttx_type_key'] = self::FTTX_TYPE_KEY;
 
         ob_start();
-        View::render('modules/FTTxDetails/Views/admin_edit_fields', $data, 'admin');
+        View::render('admin_edit_fields', $data, 'admin');
         return ob_get_clean();
     }
 
@@ -53,7 +51,7 @@ class FTTxDetailsController {
         $data['fttx_type_key'] = self::FTTX_TYPE_KEY;
 
         ob_start();
-        View::render('modules/FTTxDetails/Views/client_dashboard_details', $data, 'front');
+        View::render('client_dashboard_details', $data, 'front');
         return ob_get_clean();
     }
 }
