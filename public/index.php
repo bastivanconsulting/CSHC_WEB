@@ -1,12 +1,44 @@
 <?php
 session_start();
 
+// 1. Loading Environment
+require_once __DIR__ . '/../app/Core/Env.php';
+Env::load(__DIR__ . '/../.env');
+
+// 2. Error Handling (Must be loaded early)
+require_once __DIR__ . '/../app/Core/ErrorHandler.php';
+ErrorHandler::register();
+
 // Autoloader simple
 require_once __DIR__ . '/../app/Core/Database.php';
 require_once __DIR__ . '/../app/Core/Router.php';
 require_once __DIR__ . '/../app/Core/Hook.php';
 require_once __DIR__ . '/../app/Core/ModuleManager.php';
 require_once __DIR__ . '/../app/Core/View.php'; 
+
+// Check Maintenance Mode
+if (Env::get('MAINTENANCE_MODE') === true) {
+    // Check if user is admin to bypass? For now, we keep it simple or check a cookie/IP?
+    // "Même en mode maintenance" suggests we block everyone but show debug if error.
+    // However, usually admins want to access.
+    // Let's implement a simple check: if URL is NOT 'login' and NOT 'admin/login', we show maintenance.
+    // Or simpler: If maintenance is ON, we just render maintenance view and exit, unless it's a specific "bypass" URL.
+
+    // For this task, I will render maintenance view immediately if ON.
+    // But I will allow 'login' route maybe? No, "Mode Maintenance" usually blocks everything.
+
+    // Actually, let's keep it clean. Maintenance mode is a View.
+    // We should allow bypassing if we are already logged in as admin?
+    // Since session is started, we can check $_SESSION['user']['role']
+
+    $isAdmin = isset($_SESSION['user']) && $_SESSION['user']['role'] === 'admin';
+
+    if (!$isAdmin && !isset($_GET['bypass_maintenance'])) { // Simple bypass for testing
+         http_response_code(503);
+         View::render('maintenance', [], 'front');
+         exit;
+    }
+}
 
 ModuleManager::boot();
 $router = new Router();
