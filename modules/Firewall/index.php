@@ -131,6 +131,11 @@ if (isset($_GET['firewall_js'])) {
         localStorage.setItem('cshc_waf_token_' + domain, token);
     }
 
+    function unhideBody() {
+        document.body.style.setProperty('opacity', '1', 'important');
+        document.body.style.visibility = 'visible';
+    }
+
     // Main Check
     function checkAccess() {
         var xhr = new XMLHttpRequest();
@@ -155,9 +160,15 @@ if (isset($_GET['firewall_js'])) {
     function handleResponse(res) {
         if(res.status === 'blocked') {
             document.body.innerHTML = '<div style="background:#020617;color:#ef4444;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;"><h1 style="font-size:3rem;margin-bottom:1rem;">ACCESS DENIED</h1><p>Your IP has been blocked by CSHC Security.</p><p style="color:#94a3b8;font-size:0.9rem;">ID: ' + (res.reason || 'WAF') + '</p></div>';
+            unhideBody();
         }
         else if(res.status === 'challenge') {
             showChallenge();
+            unhideBody();
+        }
+        else {
+            // Allowed
+            unhideBody();
         }
     }
 
