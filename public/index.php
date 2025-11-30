@@ -7,7 +7,7 @@ session_set_cookie_params([
     'domain' => '',             // Domaine courant
     'secure' => true,           // Uniquement via HTTPS
     'httponly' => true,         // Inaccessible via JS (XSS protection)
-    'samesite' => 'Strict'      // Protection CSRF stricte
+    'samesite' => 'None'        // Nécessaire pour le contexte cross-site (SSO, etc.)
 ]);
 
 session_start();
